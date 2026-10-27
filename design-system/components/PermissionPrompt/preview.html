@@ -1,0 +1,67 @@
+<!-- @dsCard group="Answering" height=580 width=1180 subtitle="Exactly what the tool wants to do; allow, remember, change or deny" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>PermissionPrompt — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { PermissionPrompt, TuiFrame, tui } = window.Constellation;
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { width: "72ch" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "Bash · writes outside the project"), /* @__PURE__ */ React.createElement(
+    PermissionPrompt,
+    {
+      session: "migrations",
+      tool: "Bash",
+      verb: "run a command",
+      subject: "psql -d app_dev -f migrations/0042_tokens.sql",
+      cwd: "~/code/api-server",
+      rule: "Bash(psql -d app_dev:*)",
+      risks: [{ level: "warning", text: "writes to the database app_dev" }],
+      highlighted: 0
+    }
+  ), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "Bash · destructive · allow with changes (e)"), /* @__PURE__ */ React.createElement(
+    PermissionPrompt,
+    {
+      session: "flaky-tests",
+      tool: "Bash",
+      verb: "run a command",
+      subject: "rm -rf ~/code/api-server/.pytest_cache /tmp/pytest-*",
+      cwd: "~/code/api-server",
+      rule: "Bash(rm -rf:*)",
+      risks: [{ level: "critical", text: "deletes files outside the project" }],
+      highlighted: 2,
+      editing: { kind: "changes", value: "rm -rf ~/code/api-server/.pytest_cache" }
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { width: "62ch" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "Edit · the diff, then the same four choices"), /* @__PURE__ */ React.createElement(
+    PermissionPrompt,
+    {
+      session: "checkout-ui",
+      tool: "Edit",
+      verb: "edit a file",
+      subject: "src/checkout/Cart.tsx",
+      diff: ["@@ 41,6 @@", "   const total = useTotal(items);", "-  return <Summary total={total} />;", "+  const tax = useTax(region, total);", "+  return <Summary total={total} tax={tax} />;"],
+      rule: "Edit(src/checkout/**)",
+      highlighted: 3,
+      editing: { kind: "reason", value: "keep tax out of Cart; put it in Summary" }
+    }
+  ), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 62, lines: tui.box({
+    width: 62,
+    border: "status-waiting-fill",
+    pad: 0,
+    title: "[chip:status-waiting-fill] ? Bash [/] wants to run a command",
+    footer: "[focus b]y[/] [d]allow[/]  [focus b]a[/] [d]always[/]  [focus b]e[/] [d]edit[/]  [focus b]n[/] [d]deny[/]  [focus b]esc[/] [d]later[/]",
+    lines: [
+      " [d]$[/] [fg-strong b]psql -d app_dev -f migrations/0042_tokens.sql[/]",
+      " [d]in ~/code/api-server[/]",
+      " [res-warning]△ writes to the database app_dev[/]",
+      tui.cols([["[focus]▌[/][focus b on:selection]1 [/][fg-strong b on:selection]Allow once[/]", 57], ["[focus b]y[/]", 1]]),
+      tui.cols([["  [focus b]2[/] Allow and remember [d]Bash(psql -d app_dev:*)[/]", 57], ["[focus b]a[/]", 1]]),
+      tui.cols([["  [focus b]3[/] Allow with changes…", 57], ["[focus b]e[/]", 1]]),
+      tui.cols([["  [focus b]4[/] [msg-denied]Deny, and say why…[/]", 57], ["[focus b]n[/]", 1]])
+    ]
+  }) }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

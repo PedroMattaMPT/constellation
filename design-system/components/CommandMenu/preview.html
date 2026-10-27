@@ -1,0 +1,42 @@
+<!-- @dsCard group="Commands" height=310 width=1180 subtitle="The / menu: built-ins, skills, custom commands and MCP prompts" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>CommandMenu — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { CommandMenu, PromptBox, TuiFrame, tui } = window.Constellation;
+const cmds = [
+  { name: "compact", source: "built-in", description: "Summarise the conversation to free context", args: "[focus]" },
+  { name: "context", source: "built-in", description: "What fills the context window, by category" },
+  { name: "config", source: "built-in", description: "Set a config key: /config key=value" },
+  { name: "code-review", source: "skill", description: "Review the current diff against the team checklist" },
+  { name: "commit", source: "command", description: "~/.claude/commands/commit.md" },
+  { name: "jira:create-ticket", source: "mcp", description: "MCP prompt from the jira server" },
+  { name: "color", source: "built-in", description: "", unavailable: "terminal-only: set it in claude itself" }
+];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row", style: { alignItems: "flex-end" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { width: "74ch" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "web: opens above the prompt, matches underlined"), /* @__PURE__ */ React.createElement(CommandMenu, { query: "co", commands: cmds, highlighted: 0, total: 41 }), /* @__PURE__ */ React.createElement("div", { className: "cn-pane", style: { marginTop: 4 } }, /* @__PURE__ */ React.createElement(PromptBox, { focused: true, value: "/co" }))), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal: round border = floating"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 60, lines: [
+    ...tui.box({
+      width: 60,
+      title: "[b]/[/][fg-strong]co[/] [d]7 of 41[/]",
+      footer: "[focus b]↑↓[/] [d]move[/]  [focus b]tab[/] [d]complete[/]  [focus b]enter[/] [d]run[/]",
+      pad: 0,
+      lines: [
+        "[focus]▌[/][fg-strong b on:selection]/compact      [/][d on:selection]built-in [/][fg on:selection]Summarise to free context   [/]",
+        " /context      [d]built-in What fills the context[/]",
+        " /config       [d]built-in Set a key: key=value[/]",
+        " /code-review  [d]skill    Review the current diff[/]",
+        " /commit       [d]command  commands/commit.md[/]",
+        " /jira:create… [d]mcp      MCP prompt (jira)[/]",
+        " [fg-faint]/color        built-in terminal-only[/]"
+      ]
+    }),
+    "[line]" + "─".repeat(60) + "[/]",
+    "[msg-prompt b]›[/] [fg-strong]/co[/][r] [/]"
+  ] }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

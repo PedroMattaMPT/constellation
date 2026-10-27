@@ -1,0 +1,161 @@
+/* Constellation — Textual CSS generated from constellation.tokens.json by build_tokens.py. Do not edit.
+   Every color is a theme variable, so dark, light, 256-color and 16-color themes all reuse this file.
+   $<token>-style carries the text attribute the 16-color theme needs (dim, bold, reverse); truecolor sets it to none. */
+
+Screen { background: $bg; color: $fg; }
+
+/* ── Text helpers ───────────────────────────────────────────── */
+.fg-muted { color: $fg-muted; text-style: $fg-muted-style; }
+.fg-strong { color: $fg-strong; text-style: bold; }
+.fg-faint { color: $fg-faint; text-style: $fg-faint-style; }
+.summary { color: $fg-muted; text-style: italic; }
+.link { text-style: underline; }
+
+/* ── Status, mode, message, resource and kind colors (generated) ── */
+.status-working { color: $status-working; text-style: $status-working-style; }
+.status-waiting { color: $status-waiting; text-style: $status-waiting-style; }
+.status-idle { color: $status-idle; text-style: $status-idle-style; }
+.status-stale { color: $status-stale; text-style: $status-stale-style; }
+.status-error { color: $status-error; text-style: $status-error-style; }
+.status-stopped { color: $status-stopped; text-style: $status-stopped-style; }
+.mode-default { color: $mode-default; text-style: $mode-default-style; }
+.mode-plan { color: $mode-plan; text-style: $mode-plan-style; }
+.mode-edits { color: $mode-edits; text-style: $mode-edits-style; }
+.mode-auto { color: $mode-auto; text-style: $mode-auto-style; }
+.mode-bypass { color: $mode-bypass; text-style: $mode-bypass-style; }
+.mode-dontask { color: $mode-dontask; text-style: $mode-dontask-style; }
+.msg-prompt { color: $msg-prompt; text-style: $msg-prompt-style; }
+.msg-slash { color: $msg-slash; text-style: $msg-slash-style; }
+.msg-tool { color: $msg-tool; text-style: $msg-tool-style; }
+.msg-question { color: $msg-question; text-style: $msg-question-style; }
+.msg-answer { color: $msg-answer; text-style: $msg-answer-style; }
+.msg-denied { color: $msg-denied; text-style: $msg-denied-style; }
+.msg-sent { color: $msg-sent; text-style: $msg-sent-style; }
+.msg-received { color: $msg-received; text-style: $msg-received-style; }
+.msg-subagent { color: $msg-subagent; text-style: $msg-subagent-style; }
+.msg-reply { color: $msg-reply; text-style: $msg-reply-style; }
+.res-normal { color: $res-normal; text-style: $res-normal-style; }
+.res-warning { color: $res-warning; text-style: $res-warning-style; }
+.res-critical { color: $res-critical; text-style: $res-critical-style; }
+.kind-managed { color: $kind-managed; text-style: $kind-managed-style; }
+.kind-external { color: $kind-external; text-style: $kind-external-style; }
+
+/* Filled chips: the only places color fills a cell. */
+.chip-waiting { background: $status-waiting-fill; color: $on-status-waiting-fill; text-style: bold; }
+.chip-auto { background: $mode-auto; color: $on-mode-auto; text-style: bold; }
+.chip-bypass { background: $mode-bypass; color: $on-mode-bypass; text-style: bold; }
+.chip-critical { background: $res-critical-fill; color: $on-res-critical-fill; text-style: bold; }
+.chip-brand { background: $fill-brand; color: $on-fill-brand; text-style: bold; }
+
+/* ── Layout ─────────────────────────────────────────────────── */
+#body { height: 1fr; }
+#tree {
+    width: 34; height: 1fr; background: $panel;
+    border-right: solid $line; padding: 0 0;
+    scrollbar-size-vertical: 1;
+}
+#tree:focus-within { border-right: heavy $focus; }
+#map { height: auto; max-height: 50%; background: $surface; padding: 0 1; }
+#panes { height: 1fr; layout: horizontal; }
+#status-bar { dock: bottom; height: 1; background: $panel; color: $fg-muted; }
+#status-bar .-current { background: $selection; color: $fg-strong; text-style: bold; }
+#status-bar .-prefix { background: $fill-brand; color: $on-fill-brand; text-style: bold; }
+
+/* ── Pane: one session. Title in the top border, status line in the bottom border. ── */
+SessionPane {
+    border: solid $line; border-title-align: left; border-subtitle-align: left;
+    border-title-color: $fg-muted; border-subtitle-color: $fg-muted;
+    background: $surface; padding: 0 1; width: 1fr; height: 1fr;
+}
+SessionPane:focus-within {
+    border: heavy $focus; border-title-color: $fg-strong; border-title-style: bold;
+    border-subtitle-color: $fg;
+}
+SessionPane.-external { border: dashed $kind-external; }
+SessionPane.-external:focus-within { border: dashed $focus; }
+SessionPane.-bypass { border-title-background: $mode-bypass; border-title-color: $on-mode-bypass; }
+SessionPane.-zoomed { border: double $focus; }
+SessionPane .conversation { height: 1fr; scrollbar-size-vertical: 1; }
+SessionPane .turn-prompt { color: $msg-prompt; text-style: bold; }
+SessionPane .turn-tool { color: $fg-muted; text-style: $fg-muted-style; }
+SessionPane .turn-reply { color: $fg; }
+
+/* Prompt box: a hairline above, the › marker, grows to 6 lines. */
+PromptBox {
+    height: auto; max-height: 8; min-height: 1;
+    border-top: solid $line; background: $panel; padding: 0 1;
+}
+PromptBox:focus-within { border-top: solid $line-control; }
+PromptBox.-broadcast { border-top: heavy $edge; }
+PromptBox.-disabled { color: $fg-faint; text-style: italic; }
+
+/* ── Session row on the map and in the status bar ─────────────── */
+SessionRow { height: 2; padding: 0 1; }
+SessionRow.-compact { height: 1; }
+SessionRow.-selected { background: $selection; }
+SessionRow:focus { background: $selection; text-style: bold; }
+SessionRow.-waiting { border-left: outer $status-waiting-fill; }
+SessionRow.-stale { border-left: outer $status-stale; }
+SessionRow.-external { text-style: italic; }
+
+/* ── Tree ─────────────────────────────────────────────────────── */
+MessageTree { background: $panel; }
+MessageTree > .tree--guides { color: $fg-faint; }
+MessageTree > .tree--guides-hover { color: $line-control; }
+MessageTree > .tree--guides-selected { color: $focus; }
+MessageTree > .tree--cursor { background: $selection; color: $fg-strong; text-style: $block-cursor-text-style; }
+MessageTree > .tree--highlight-line { background: $hover; }
+
+/* ── Floating things: command menu, pickers, cards, dialogs (round border) ── */
+CommandMenu, Picker {
+    background: $raised; border: round $line-strong; padding: 0 0;
+    width: 100%; max-width: 72; max-height: 14;
+}
+CommandMenu > .option-list--option-highlighted, Picker > .option-list--option-highlighted {
+    background: $selection; color: $fg-strong; text-style: bold;
+}
+QuestionCard {
+    background: $raised; border: round $status-waiting-fill; padding: 0 1; height: auto;
+    border-title-color: $on-status-waiting-fill; border-title-background: $status-waiting-fill; border-title-style: bold;
+}
+QuestionCard.-answered { border: round $line-strong; border-title-background: $raised; border-title-color: $msg-answer; }
+PermissionCard {
+    background: $raised; border: round $status-waiting-fill; padding: 0 1; height: auto;
+    border-title-color: $on-status-waiting-fill; border-title-background: $status-waiting-fill; border-title-style: bold;
+}
+PermissionCard .diff-add { color: $msg-answer; }
+PermissionCard .diff-del { color: $msg-denied; }
+PermissionCard.-bypass-risk { border: round $mode-bypass; }
+Option { height: 1; padding: 0 1; }
+Option.-highlighted { background: $selection; color: $fg-strong; text-style: bold; }
+Option.-chosen { color: $fg-strong; text-style: bold; }
+Option.-disabled { color: $fg-faint; text-style: $fg-faint-style; }
+
+/* ── Meters ───────────────────────────────────────────────────── */
+ContextBar { width: 16; height: 1; color: $res-normal; background: $panel; }
+ContextBar.-warning { color: $res-warning; }
+ContextBar.-critical { color: $res-critical; text-style: $res-critical-style; }
+Sparkline { height: 1; }
+Sparkline > .sparkline--min-color { color: $res-normal; }
+Sparkline > .sparkline--max-color { color: $res-normal; }
+Sparkline.-warning > .sparkline--max-color { color: $res-warning; }
+Sparkline.-critical > .sparkline--max-color { color: $res-critical; }
+
+/* ── Dialogs ──────────────────────────────────────────────────── */
+ModalScreen { background: $bg 60%; }
+Launcher, BroadcastDialog, ConfirmStop {
+    background: $raised; border: round $line-strong; padding: 1 2; width: 72; height: auto;
+    border-title-color: $fg-strong; border-title-style: bold;
+}
+BroadcastDialog { border: round $edge; }
+ConfirmStop { border: round $status-error; }
+Input { border: tall $line-control; background: $surface; }
+Input:focus { border: tall $focus; }
+Button { min-width: 10; height: 1; border: none; background: $panel; color: $fg; }
+Button:focus { background: $fill-brand; color: $on-fill-brand; text-style: bold; }
+Button.-danger { color: $status-error; }
+Button.-danger:focus { background: $mode-bypass; color: $on-mode-bypass; }
+
+/* ── Key hints ────────────────────────────────────────────────── */
+.key { color: $focus; text-style: bold; }
+.key-label { color: $fg-muted; text-style: $fg-muted-style; }

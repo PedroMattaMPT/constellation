@@ -1,0 +1,1296 @@
+{
+  "$defs": {
+    "AnswerRequest": {
+      "additionalProperties": false,
+      "description": "Answer a pending request. For a question, `updated_input` carries the tool input plus `answers`.",
+      "properties": {
+        "allow": {
+          "type": "boolean"
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why it was denied: the session reads this."
+        },
+        "updatedInput": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "remember": {
+          "default": false,
+          "description": "Allow and remember: add Claude Code's suggested allow rule.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "allow",
+        "message",
+        "updatedInput",
+        "remember"
+      ],
+      "title": "AnswerRequest",
+      "type": "object"
+    },
+    "Context": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "usedTokens": {
+          "type": "integer"
+        },
+        "windowTokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "percent": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "model",
+        "usedTokens",
+        "windowTokens",
+        "percent"
+      ],
+      "title": "Context",
+      "type": "object"
+    },
+    "Edge": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "description": "Session id or endpoint id.",
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "lastAt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lastSummary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "msgIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target",
+        "count",
+        "lastAt",
+        "lastSummary",
+        "msgIds"
+      ],
+      "title": "Edge",
+      "type": "object"
+    },
+    "Endpoint": {
+      "additionalProperties": false,
+      "description": "A message peer that isn't a running session: one that exited, or a non-Claude sender.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "addresses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "addresses"
+      ],
+      "title": "Endpoint",
+      "type": "object"
+    },
+    "EntriesEvent": {
+      "additionalProperties": false,
+      "description": "New or updated entries (upsert by id). `reset`: too many to send; drop the cache and refetch.",
+      "properties": {
+        "type": {
+          "const": "entries",
+          "default": "entries",
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/Entry"
+          },
+          "type": "array"
+        },
+        "reset": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "session",
+        "entries",
+        "reset"
+      ],
+      "title": "EntriesEvent",
+      "type": "object"
+    },
+    "Entry": {
+      "additionalProperties": false,
+      "description": "One line of the message tree and the conversation. Full content: GET .../entries/{id}.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "seq": {
+          "description": "Position in the session, across /clear.",
+          "type": "integer"
+        },
+        "turn": {
+          "description": "Turn number; 0 before the first prompt.",
+          "type": "integer"
+        },
+        "starter": {
+          "description": "Starts a turn: a top-level row under the session in the tree.",
+          "type": "boolean"
+        },
+        "kind": {
+          "enum": [
+            "prompt",
+            "slash",
+            "tool",
+            "question",
+            "answer",
+            "denied",
+            "sent",
+            "received",
+            "subagent_started",
+            "subagent_reported",
+            "reply",
+            "thinking",
+            "interrupt",
+            "compact",
+            "notice"
+          ],
+          "type": "string"
+        },
+        "at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "description": "First line: the prompt, tool name, peer name or reply text.",
+          "type": "string"
+        },
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Muted remainder: arguments, file, preview."
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "toolUseId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resultError": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resultPreview": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "peer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "For sent/received: the other side's name or address."
+        },
+        "msgId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "agentId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sessionId": {
+          "description": "The transcript this entry is in.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "seq",
+        "turn",
+        "starter",
+        "kind",
+        "at",
+        "text",
+        "detail",
+        "tool",
+        "toolUseId",
+        "resultError",
+        "resultPreview",
+        "peer",
+        "msgId",
+        "agentId",
+        "sessionId"
+      ],
+      "title": "Entry",
+      "type": "object"
+    },
+    "EntryContent": {
+      "additionalProperties": false,
+      "properties": {
+        "entry": {
+          "$ref": "#/$defs/Entry"
+        },
+        "text": {
+          "description": "Everything the entry says, untruncated up to a size cap.",
+          "type": "string"
+        },
+        "input": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tool input as pretty JSON."
+        },
+        "result": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tool result text."
+        },
+        "truncated": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "entry",
+        "text",
+        "input",
+        "result",
+        "truncated"
+      ],
+      "title": "EntryContent",
+      "type": "object"
+    },
+    "EntryPage": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/Entry"
+          },
+          "type": "array"
+        },
+        "hasBefore": {
+          "type": "boolean"
+        },
+        "hasAfter": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "entries",
+        "hasBefore",
+        "hasAfter"
+      ],
+      "title": "EntryPage",
+      "type": "object"
+    },
+    "GraphEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "graph",
+          "default": "graph",
+          "type": "string"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/Edge"
+          },
+          "type": "array"
+        },
+        "endpoints": {
+          "items": {
+            "$ref": "#/$defs/Endpoint"
+          },
+          "type": "array"
+        },
+        "subagents": {
+          "items": {
+            "$ref": "#/$defs/Subagent"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "type",
+        "edges",
+        "endpoints",
+        "subagents"
+      ],
+      "title": "GraphEvent",
+      "type": "object"
+    },
+    "ImageInput": {
+      "additionalProperties": false,
+      "properties": {
+        "mediaType": {
+          "enum": [
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp"
+          ],
+          "type": "string"
+        },
+        "data": {
+          "description": "Base64, up to 5 MB decoded (the API's limit per image).",
+          "maxLength": 7000000,
+          "type": "string"
+        }
+      },
+      "required": [
+        "mediaType",
+        "data"
+      ],
+      "title": "ImageInput",
+      "type": "object"
+    },
+    "PendingRequest": {
+      "additionalProperties": false,
+      "description": "A question, permission prompt or plan approval a managed session is waiting on.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "question",
+            "permission",
+            "plan"
+          ],
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "input": {
+          "additionalProperties": true,
+          "description": "The tool's input: for a question, its `questions` list.",
+          "type": "object"
+        },
+        "rules": {
+          "description": "What 'allow and remember' saves: `Bash(touch x)`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "at": {
+          "description": "Unix ms.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "tool",
+        "input",
+        "rules",
+        "at"
+      ],
+      "title": "PendingRequest",
+      "type": "object"
+    },
+    "PromptRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "maxLength": 200000,
+          "type": "string"
+        },
+        "images": {
+          "items": {
+            "$ref": "#/$defs/ImageInput"
+          },
+          "maxItems": 20,
+          "type": "array"
+        }
+      },
+      "required": [
+        "text",
+        "images"
+      ],
+      "title": "PromptRequest",
+      "type": "object"
+    },
+    "Queued": {
+      "additionalProperties": false,
+      "properties": {
+        "queued": {
+          "description": "Prompts still waiting after this one: 0 means it was sent now.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "queued"
+      ],
+      "title": "Queued",
+      "type": "object"
+    },
+    "RenameRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RenameRequest",
+      "type": "object"
+    },
+    "Session": {
+      "additionalProperties": false,
+      "description": "One running Claude Code process. Its id stays the same across /clear; `session_id` changes.",
+      "properties": {
+        "id": {
+          "description": "Node id: '<pid>-<procStart>'. Stable for the life of the process.",
+          "type": "string"
+        },
+        "sessionId": {
+          "type": "string"
+        },
+        "sessionIds": {
+          "description": "Every session this process has had while watched, oldest first.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pid": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nameSource": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "enum": [
+            "managed",
+            "external"
+          ],
+          "type": "string"
+        },
+        "processKind": {
+          "description": "Registry kind: 'interactive' or 'bg'.",
+          "type": "string"
+        },
+        "cwd": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tmux": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "startedAt": {
+          "description": "Unix ms.",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "working",
+            "waiting",
+            "idle",
+            "stale",
+            "error",
+            "stopped"
+          ],
+          "type": "string"
+        },
+        "rawStatus": {
+          "description": "As the registry has it: busy, idle, shell, waiting.",
+          "type": "string"
+        },
+        "waitingFor": {
+          "anyOf": [
+            {
+              "enum": [
+                "permission prompt",
+                "input needed",
+                "sandbox request",
+                "worker request",
+                "dialog open"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lastActivityAt": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Unix ms of the latest entry or status change."
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "default",
+                "plan",
+                "acceptEdits",
+                "auto",
+                "bypassPermissions",
+                "dontAsk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "firstPrompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "lastPrompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "step": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latest step: 'Edit src/app.ts', or the reply's first line."
+        },
+        "awaySummary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Context"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "costUsd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Managed: live, from the SDK. External: the last cost Claude Code recorded, not live."
+        },
+        "prLinks": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "artifacts": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "turns": {
+          "default": 0,
+          "type": "integer"
+        },
+        "entries": {
+          "default": 0,
+          "type": "integer"
+        },
+        "counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Entries per kind.",
+          "type": "object"
+        },
+        "compactions": {
+          "default": 0,
+          "type": "integer"
+        },
+        "transcriptExists": {
+          "default": false,
+          "type": "boolean"
+        },
+        "queued": {
+          "description": "Prompts waiting for the current turn to end.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "pending": {
+          "description": "Waiting for your answer.",
+          "items": {
+            "$ref": "#/$defs/PendingRequest"
+          },
+          "type": "array"
+        },
+        "activity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What Claude Code is busy with besides a turn: 'compacting'."
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How the last turn failed, if it did."
+        }
+      },
+      "required": [
+        "id",
+        "sessionId",
+        "sessionIds",
+        "pid",
+        "name",
+        "nameSource",
+        "kind",
+        "processKind",
+        "cwd",
+        "project",
+        "branch",
+        "tmux",
+        "version",
+        "startedAt",
+        "status",
+        "rawStatus",
+        "waitingFor",
+        "lastActivityAt",
+        "mode",
+        "title",
+        "firstPrompt",
+        "lastPrompt",
+        "step",
+        "awaySummary",
+        "context",
+        "costUsd",
+        "prLinks",
+        "artifacts",
+        "turns",
+        "entries",
+        "counts",
+        "compactions",
+        "transcriptExists",
+        "queued",
+        "pending",
+        "activity",
+        "error"
+      ],
+      "title": "Session",
+      "type": "object"
+    },
+    "SessionEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "session",
+          "default": "session",
+          "type": "string"
+        },
+        "session": {
+          "$ref": "#/$defs/Session"
+        }
+      },
+      "required": [
+        "type",
+        "session"
+      ],
+      "title": "SessionEvent",
+      "type": "object"
+    },
+    "SessionRemovedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "session_removed",
+          "default": "session_removed",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "title": "SessionRemovedEvent",
+      "type": "object"
+    },
+    "Snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "protocol": {
+          "default": 1,
+          "type": "integer"
+        },
+        "generatedAt": {
+          "type": "integer"
+        },
+        "sessions": {
+          "items": {
+            "$ref": "#/$defs/Session"
+          },
+          "type": "array"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/Edge"
+          },
+          "type": "array"
+        },
+        "endpoints": {
+          "items": {
+            "$ref": "#/$defs/Endpoint"
+          },
+          "type": "array"
+        },
+        "subagents": {
+          "items": {
+            "$ref": "#/$defs/Subagent"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "protocol",
+        "generatedAt",
+        "sessions",
+        "edges",
+        "endpoints",
+        "subagents"
+      ],
+      "title": "Snapshot",
+      "type": "object"
+    },
+    "SnapshotEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "snapshot",
+          "default": "snapshot",
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/Snapshot"
+        }
+      },
+      "required": [
+        "type",
+        "snapshot"
+      ],
+      "title": "SnapshotEvent",
+      "type": "object"
+    },
+    "StartRequest": {
+      "additionalProperties": false,
+      "description": "Start a managed session. No mode: your own default mode applies.",
+      "properties": {
+        "cwd": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "default",
+                "plan",
+                "acceptEdits",
+                "auto",
+                "bypassPermissions",
+                "dontAsk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "cwd",
+        "model",
+        "mode",
+        "name"
+      ],
+      "title": "StartRequest",
+      "type": "object"
+    },
+    "Started": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Started",
+      "type": "object"
+    },
+    "Subagent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "parent": {
+          "description": "Session id of the parent.",
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "enum": [
+            "working",
+            "reported"
+          ],
+          "type": "string"
+        },
+        "at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "depth": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "background": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "parent",
+        "type",
+        "description",
+        "status",
+        "at",
+        "depth",
+        "background"
+      ],
+      "title": "Subagent",
+      "type": "object"
+    },
+    "Turn": {
+      "additionalProperties": false,
+      "properties": {
+        "turn": {
+          "type": "integer"
+        },
+        "entry": {
+          "$ref": "#/$defs/Entry"
+        },
+        "entries": {
+          "type": "integer"
+        },
+        "attention": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "turn",
+        "entry",
+        "entries",
+        "attention"
+      ],
+      "title": "Turn",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root for schema export: every type a client needs.",
+  "properties": {
+    "event": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SnapshotEvent"
+        },
+        {
+          "$ref": "#/$defs/SessionEvent"
+        },
+        {
+          "$ref": "#/$defs/SessionRemovedEvent"
+        },
+        {
+          "$ref": "#/$defs/EntriesEvent"
+        },
+        {
+          "$ref": "#/$defs/GraphEvent"
+        }
+      ]
+    },
+    "entryPage": {
+      "$ref": "#/$defs/EntryPage"
+    },
+    "entryContent": {
+      "$ref": "#/$defs/EntryContent"
+    },
+    "turns": {
+      "items": {
+        "$ref": "#/$defs/Turn"
+      },
+      "type": "array"
+    },
+    "startRequest": {
+      "$ref": "#/$defs/StartRequest"
+    },
+    "started": {
+      "$ref": "#/$defs/Started"
+    },
+    "promptRequest": {
+      "$ref": "#/$defs/PromptRequest"
+    },
+    "queued": {
+      "$ref": "#/$defs/Queued"
+    },
+    "renameRequest": {
+      "$ref": "#/$defs/RenameRequest"
+    },
+    "answerRequest": {
+      "$ref": "#/$defs/AnswerRequest"
+    }
+  },
+  "required": [
+    "event",
+    "entryPage",
+    "entryContent",
+    "turns",
+    "startRequest",
+    "started",
+    "promptRequest",
+    "queued",
+    "renameRequest",
+    "answerRequest"
+  ],
+  "title": "Protocol",
+  "type": "object"
+}

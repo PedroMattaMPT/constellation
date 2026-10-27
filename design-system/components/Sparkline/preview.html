@@ -1,0 +1,23 @@
+<!-- @dsCard group="Resources" height=340 width=1180 subtitle="30 minutes of history, one cell per minute" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Sparkline — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { Sparkline, TuiFrame, sparkText } = window.Constellation;
+const calm = [4, 6, 5, 8, 12, 9, 7, 6, 10, 14, 12, 9, 8, 7, 6, 9, 11, 10, 8, 7, 9, 12, 15, 11, 9, 8, 7, 9, 10, 8];
+const busy = [12, 14, 20, 35, 30, 42, 60, 55, 48, 70, 90, 120, 160, 140, 110, 95, 130, 180, 210, 240, 230, 260, 300, 280, 310, 290, 320, 330, 340, 340];
+const gpu = [8, 9, 12, 14, 15, 15, 16, 17, 17, 18, 18, 19, 19, 19.5, 20, 20, 20.2, 20.4, 20.6, 20.8, 21, 21, 21.1, 21.2, 21.2, 21.3, 21.3, 21.4, 21.4, 21.4];
+const turns = [12, 30, 8, 44, 61, 22, 15, 90, 35, 18, 41, 26];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "cpu · normal"), /* @__PURE__ */ React.createElement(Sparkline, { values: calm, label: "cpu", current: "8%", max: 400, warn: 200, crit: 400 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "cpu · busy for more than 5 minutes (runaway)"), /* @__PURE__ */ React.createElement(Sparkline, { values: busy, label: "cpu", current: "340%", max: 400, warn: 200, crit: 400 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "gpu memory · over the 20 GB limit you set"), /* @__PURE__ */ React.createElement(Sparkline, { values: gpu, label: "gpu", current: "21.4/20 GB", max: 24, warn: 16, crit: 20 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "tokens per turn (k) · last 12 turns"), /* @__PURE__ */ React.createElement(Sparkline, { values: turns, label: "tok", current: "26k" })), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 70, lines: [
+    `[d]cpu[/] [res-normal]${sparkText(calm, 400)}[/] [d]8%[/]`,
+    `[d]cpu[/] [res-normal]${sparkText(busy, 400).slice(0, 17)}[/][res-warning]${sparkText(busy, 400).slice(17)}[/] [res-warning]340% △[/]`,
+    `[d]gpu[/] [res-normal]${sparkText(gpu, 24).slice(0, 4)}[/][res-warning]${sparkText(gpu, 24).slice(4, 20)}[/][res-critical]${sparkText(gpu, 24).slice(20)}[/] [chip:res-critical-fill] ▲ 21.4/20 GB [/]`
+  ] }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

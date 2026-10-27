@@ -1,0 +1,108 @@
+{
+  "v": 3,
+  "layout": "files",
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-26T21:23:07Z"
+  },
+  "title": "Constellation",
+  "namespace": "Constellation",
+  "libraries": [
+    {
+      "name": "react",
+      "version": "18"
+    },
+    {
+      "name": "react-dom",
+      "version": "18"
+    }
+  ],
+  "sections": {},
+  "groups": [
+    "Screens",
+    "Source"
+  ],
+  "assetGroups": {
+    "Screens": {
+      "name": "Screens",
+      "tile": "l",
+      "order": [
+        "main-dark.png",
+        "main-light.png",
+        "main-dark-256.png",
+        "main-16-solarized-dark.png",
+        "main-16-solarized-light.png",
+        "main-ascii.png",
+        "prompts-dark.png",
+        "prompts-light.png"
+      ],
+      "files": {
+        "main-dark.png": {
+          "name": "main-dark.png",
+          "blob": "d4cbdf6f8325bc14ed4df64633646dbf",
+          "size": 749061,
+          "type": "image/png"
+        },
+        "main-light.png": {
+          "name": "main-light.png",
+          "blob": "de2186ca785708405ae4a069c9d8490f",
+          "size": 742471,
+          "type": "image/png"
+        },
+        "main-dark-256.png": {
+          "name": "main-dark-256.png",
+          "blob": "9ecff2cbeba266c99f344ef11fa67955",
+          "size": 670779,
+          "type": "image/png"
+        },
+        "main-16-solarized-dark.png": {
+          "name": "main-16-solarized-dark.png",
+          "blob": "4082b6de62f35ef847fa605080338e45",
+          "size": 713337,
+          "type": "image/png"
+        },
+        "main-16-solarized-light.png": {
+          "name": "main-16-solarized-light.png",
+          "blob": "4ee49e43c7104236eb2f28771258ca3b",
+          "size": 715288,
+          "type": "image/png"
+        },
+        "main-ascii.png": {
+          "name": "main-ascii.png",
+          "blob": "4307b879bff51c48eca9943f55423da6",
+          "size": 750471,
+          "type": "image/png"
+        },
+        "prompts-dark.png": {
+          "name": "prompts-dark.png",
+          "blob": "63dfb54855fbe7960e11d95a3f87e8a4",
+          "size": 400517,
+          "type": "image/png"
+        },
+        "prompts-light.png": {
+          "name": "prompts-light.png",
+          "blob": "7074cda168ebbe4daae5d807a2a23f45",
+          "size": 396794,
+          "type": "image/png"
+        }
+      }
+    },
+    "Source": {
+      "name": "Source",
+      "tile": "s",
+      "order": [],
+      "files": {}
+    }
+  },
+  "blobs": {},
+  "docs": {
+    "readme": "project/README.md",
+    "sections": []
+  },
+  "lastChange": {
+    "by": "Claude",
+    "at": "2026-10-26T21:23:07Z",
+    "via": "Claude Code",
+    "note": "First version: tokens, Textual theme + TCSS + CSS generated from one source, 17 components with web and TUI variants, brand book, specimen renders."
+  }
+}

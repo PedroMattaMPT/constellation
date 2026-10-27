@@ -1,0 +1,11 @@
+{
+  "msgV": 1,
+  "msg_id": "d0adc062-3efa-4213-bf54-085d2e09db0c",
+  "type": "user",
+  "message": {
+    "role": "user",
+    "content": "<cross-session-message from=\"uds:/run/user/1000/cc-socks/3121904.sock\" hop-chain=\"68e18c86e2fac8eaa934fb04\" from-name=\"lab-b\" from-mode=\"prompting\">\nack\n</cross-session-message>"
+  },
+  "priority": "next",
+  "from": "uds:/run/user/1000/cc-socks/3121904.sock"
+}

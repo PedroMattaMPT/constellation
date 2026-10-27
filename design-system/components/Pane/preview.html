@@ -1,0 +1,108 @@
+<!-- @dsCard group="Panes" height=1090 width=1180 subtitle="One session per pane: header, conversation, prompt box, status line" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Pane — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { Pane, QuestionCard, TuiFrame, tui } = window.Constellation;
+const focusedMsgs = [
+  { type: "prompt", text: "Go ahead, keep the public API the same." },
+  { type: "slash", text: "compact", detail: "182k → 41k tokens" },
+  { type: "tool", text: "Edit", detail: "src/auth/session.ts  +48 −12" },
+  { type: "sent", text: "migrations", detail: "We need a tokens table, see schema" },
+  { type: "received", text: "migrations", detail: "0042_tokens.sql drafted" },
+  { type: "reply", text: "The token layer is in place. Before I move the sessions over, one decision:" }
+];
+const workingMsgs = [
+  { type: "prompt", text: "Limit /login to 5/min per IP." },
+  { type: "tool", text: "Agent", detail: "explore: where are limits set?" },
+  { type: "subagent_started", text: "explore", detail: "working · 6 tools" },
+  { type: "tool", text: "Read", detail: "src/limits/index.ts" },
+  { type: "tool", text: "Edit", detail: "src/limits/route.ts  +31" }
+];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row", style: { flexWrap: "nowrap" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "focused · needs you (question docked above the prompt)"), /* @__PURE__ */ React.createElement(
+    Pane,
+    {
+      index: 1,
+      name: "auth-refactor",
+      project: "api-server",
+      status: "waiting",
+      focused: true,
+      height: 430,
+      messages: focusedMsgs,
+      dock: /* @__PURE__ */ React.createElement(QuestionCard, { session: "auth-refactor", questions: [{ header: "Session store", question: "Which session store should the token layer use?", options: [{ label: "Redis", description: "already in docker-compose" }, { label: "Postgres", description: "one less service" }, { label: "In-memory", description: "tests only" }] }], highlighted: 0 }),
+      prompt: { placeholder: "answer above, or type to reply…", images: [{ name: "schema.png", size: "1280×720" }] },
+      status_line: { model: "opus-5.5", branch: "feat/auth-split", ctx: 64, mode: "acceptEdits", cost: "$1.84" }
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "unfocused · working · auto"), /* @__PURE__ */ React.createElement(
+    Pane,
+    {
+      index: 3,
+      name: "rate-limits",
+      project: "api-server",
+      status: "working",
+      height: 430,
+      messages: workingMsgs,
+      activity: "Editing src/limits/route.ts  4s",
+      prompt: { running: true, placeholder: "queue a message…" },
+      status_line: { model: "opus-5.5", branch: "main", ctx: 83, mode: "auto", cost: "$2.10", mcp: { up: 3, down: 1 } }
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "pv-row", style: { flexWrap: "nowrap" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "external · watched (dashed)"), /* @__PURE__ */ React.createElement(
+    Pane,
+    {
+      index: 4,
+      name: "api-docs",
+      project: "api-server",
+      kind: "external",
+      status: "idle",
+      height: 200,
+      messages: [{ type: "prompt", text: "Regenerate the OpenAPI docs." }, { type: "reply", text: "Done: docs/openapi.yaml, 2 routes renamed." }],
+      status_line: { model: "sonnet-5.5", branch: "docs/v2", ctx: 31, mode: "default" }
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "bypass · zoomed · renaming (prefix ,)"), /* @__PURE__ */ React.createElement(
+    Pane,
+    {
+      index: 10,
+      name: "train-eval",
+      renaming: "lr-sweep-v2",
+      project: "ml-pipeline",
+      status: "working",
+      zoomed: true,
+      height: 200,
+      messages: [{ type: "tool", text: "Bash", detail: "python train.py --lr 3e-4" }],
+      activity: "Bash python train.py  2m 14s",
+      prompt: { running: true },
+      status_line: { model: "opus-5.5", branch: "exp/lr-sweep", ctx: 29, mode: "bypassPermissions", cost: "$0.58" }
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal: title in the top border, status line in the bottom border"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 66, lines: tui.box({
+    width: 66,
+    kind: "heavy",
+    border: "focus",
+    title: "[chip:fill-brand]1[/] [b]auth-refactor[/] [kind-managed]◆[/] [d]api-server[/] [chip:status-waiting-fill] ? needs you [/]",
+    footer: "[d]opus-5.5 │ ctx[/] [res-normal]█████[/][res-track]···[/] [d]64% │[/] [mode-edits]± edits[/] [d]│ $1.84[/]",
+    lines: [
+      "[msg-prompt b]› Go ahead, keep the public API the same.[/]",
+      "[msg-slash b]/compact[/]  [d]182k → 41k tokens[/]",
+      "[msg-tool]λ Edit[/] [d]src/auth/session.ts[/]  [msg-answer]+48[/] [msg-denied]−12[/]",
+      "[msg-sent]→ migrations[/]  [d]We need a tokens table, see schema[/]",
+      "[msg-received]← migrations[/]  [d]0042_tokens.sql drafted[/]",
+      "[msg-reply]¶[/] The token layer is in place. Before I move the",
+      "  sessions over, one decision:",
+      ...tui.box({
+        width: 60,
+        border: "status-waiting-fill",
+        title: "[chip:status-waiting-fill] ? Session store [/] [d]1/1[/]",
+        footer: "[focus b]1-3[/] [d]pick[/]  [focus b]o[/] [d]other[/]  [focus b]esc[/] [d]later[/]",
+        lines: ["[fg-strong b]Which session store should the token layer use?[/]", "[focus]▌[/][focus b](●)[/] [fg-strong b]1 Redis[/]     [d]already in docker-compose[/]", " [d]( )[/] 2 Postgres  [d]one less service[/]", " [d]( )[/] 3 In-memory [d]tests only[/]"]
+      }),
+      "[line]──────────────────────────────────────────────────────────────[/]",
+      "[msg-prompt b]›[/] [fg-faint i]answer above, or type to reply…[/]"
+    ]
+  }) }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

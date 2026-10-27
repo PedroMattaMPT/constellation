@@ -1,0 +1,38 @@
+<!-- @dsCard group="Sessions" height=370 width=1180 subtitle="One prompt to the sessions you pick (synchronize-panes)" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>BroadcastPrompt — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { BroadcastPrompt, TuiFrame, tui } = window.Constellation;
+const targets = [
+  { n: 1, name: "auth-refactor", project: "api-server", kind: "managed", status: "waiting", selected: true, note: "answer its question first: the prompt queues" },
+  { n: 3, name: "rate-limits", project: "api-server", kind: "managed", status: "working", selected: true, note: "queued after this turn" },
+  { n: 4, name: "api-docs", project: "api-server", kind: "external", status: "idle", selected: true, note: "external: arrives as a peer message" },
+  { n: 5, name: "flaky-tests", project: "api-server", kind: "managed", status: "error", selected: false, note: "" },
+  { n: 6, name: "checkout-ui", project: "web-app", kind: "managed", status: "working", selected: false, note: "" },
+  { n: 7, name: "design-tokens", project: "web-app", kind: "managed", status: "idle", selected: false, note: "plan mode: will only plan" }
+];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "web · cursor on rate-limits · 3 picked"), /* @__PURE__ */ React.createElement(BroadcastPrompt, { targets, prompt: "Rebase on main and rerun the tests", cursor: 1 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal · panes in sync show a teal prompt edge"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 54, lines: tui.box({
+    width: 54,
+    border: "edge",
+    pad: 0,
+    title: "[msg-sent]→[/] [b]send to several sessions[/] [msg-sent]3 picked[/]",
+    footer: "[focus b]space[/] [d]pick[/] [focus b]p[/] [d]project[/] [focus b]C-enter[/] [d]send to 3[/]",
+    lines: [
+      " [d]⌂[/] [b]api-server[/]",
+      "  [msg-sent b]\\[x][/] [kind-managed]◆[/] [b]auth-refactor[/] [chip:status-waiting-fill] ? [/] [d]queues[/]",
+      "[focus]▌[/][on:selection] [/][msg-sent b on:selection]\\[x] [/][kind-managed on:selection]◆ [/][fg-strong b on:selection]rate-limits   [/][status-working on:selection]● [/][d on:selection]after this turn       [/]",
+      "  [msg-sent b]\\[x][/] [kind-external]◇[/] [kind-external i]api-docs[/]      [status-idle]○[/] [d]as a peer message[/]",
+      "  [d]\\[ ][/] [kind-managed]◆[/] [b]flaky-tests[/]   [status-error]×[/]",
+      "[edge]" + "─".repeat(52) + "[/]",
+      " [msg-sent b]›[/] [fg-strong]Rebase on main and rerun the tests[/][r] [/]"
+    ]
+  }) }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

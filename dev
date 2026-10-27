@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Runs the server and the web app's dev server together. Ctrl-C stops both.
+# Open the link it prints (the web app on :7338, talking to the server on :7337).
+set -euo pipefail
+cd "$(dirname "$0")"
+CONSTELLATION_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+export CONSTELLATION_TOKEN
+trap 'kill 0' EXIT
+uv run --project server constellation serve --ui http://127.0.0.1:7338 &
+npm --prefix web run dev -- --clearScreen false &
+wait

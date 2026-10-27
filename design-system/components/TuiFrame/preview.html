@@ -1,0 +1,20 @@
+<!-- @dsCard group="Atoms" height=180 width=1180 subtitle="A terminal snippet on the web, from Textual-style markup" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>TuiFrame — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { TuiFrame } = window.Constellation;
+const lines = [
+  "[kind-managed]◆[/] [b]rate-limits[/] [status-working]● working[/] [chip:mode-auto] » auto [/] [d]@main 4s[/] [res-warning]△ctx[/]",
+  "[d]  Add per-route rate limits[/]",
+  "[status-working]▝ Edit src/limits/route.ts[/] [d]· esc interrupts[/]"
+];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { width: "64ch" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "markup"), /* @__PURE__ */ React.createElement("pre", { className: "cn-diff", style: { whiteSpace: "pre-wrap" } }, lines.join("\n"))), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "renders as"), /* @__PURE__ */ React.createElement(TuiFrame, { title: "terminal", cols: 52, lines }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

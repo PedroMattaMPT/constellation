@@ -1,0 +1,38 @@
+{
+  "state": "working",
+  "detail": "Hi",
+  "tempo": "blocked",
+  "inFlight": {
+    "tasks": 0,
+    "queued": 0,
+    "kinds": []
+  },
+  "needs": "send a prompt to start",
+  "output": null,
+  "children": null,
+  "linkScanOffset": 0,
+  "template": "bg",
+  "respawnFlags": [
+    "--permission-mode",
+    "default",
+    "--model",
+    "haiku"
+  ],
+  "providerEnv": {},
+  "forkSourceAlive": true,
+  "forkBoundaryAt": "2026-10-26T22:02:49.099Z",
+  "forkSessionId": "cc5e4a15-9769-4ae1-9978-246739433a2a",
+  "forkParentSessionId": "8bd8f76e-b68f-4783-a208-cb0090aa1c56",
+  "interactiveLineage": true,
+  "intent": "say hi in one word",
+  "name": "lab-a ⑂",
+  "nameSource": "auto",
+  "sessionId": "cc5e4a15-9769-4ae1-9978-246739433a2a",
+  "resumeSessionId": "cc5e4a15-9769-4ae1-9978-246739433a2a",
+  "daemonShort": "cc5e4a15",
+  "cwd": "/home/pedro/github/Constellation/research/lab/a",
+  "createdAt": "2026-10-26T22:02:53.959Z",
+  "updatedAt": "2026-10-26T22:02:55.136Z",
+  "firstTerminalAt": null,
+  "backend": "daemon"
+}

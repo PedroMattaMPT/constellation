@@ -1,0 +1,19 @@
+<!-- @dsCard group="Atoms" height=290 width=1180 subtitle="Six statuses: glyph, word and color on every surface" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>StatusBadge — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { StatusBadge, TuiFrame } = window.Constellation;
+const all = ["working", "waiting", "idle", "stale", "error", "stopped"];
+const surfaces = ["bg", "surface", "panel", "raised", "selection"];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, surfaces.map((s) => /* @__PURE__ */ React.createElement("div", { key: s, className: "pv-row", style: { background: `var(--${s})`, padding: "4px 1ch", gap: "3ch", alignItems: "center" } }, /* @__PURE__ */ React.createElement("span", { className: "pv-cap", style: { width: "10ch" } }, s), all.map((st) => /* @__PURE__ */ React.createElement(StatusBadge, { key: st, status: st, age: "3h" })), /* @__PURE__ */ React.createElement("span", { className: "cn-dim" }, "compact"), all.map((st) => /* @__PURE__ */ React.createElement(StatusBadge, { key: st + "c", status: st, compact: true })))), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 96, lines: [
+    "[status-working]● working[/]  [chip:status-waiting-fill] ? needs you [/]  [status-idle]○ idle[/]  [status-stale]◌ stale 3h[/]  [status-error b]× error[/]  [status-stopped]■ stopped[/]     [d]ascii:[/] [status-working]*[/] [chip:status-waiting-fill]?[/] [status-idle]o[/] [status-stale]~[/] [status-error]x[/] [status-stopped]#[/]"
+  ] }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

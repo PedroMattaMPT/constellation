@@ -1,0 +1,190 @@
+{
+  "generatedAt": "2026-10-26T22:07:12+0000",
+  "tookSeconds": 0.21,
+  "sessions": [
+    {
+      "id": "63574ae0-4e20-401a-a3af-b3d4cef4d5ec",
+      "pid": 3150388,
+      "name": "lab-b",
+      "nameSource": "user",
+      "kind": "interactive",
+      "cwd": "/home/pedro/github/Constellation/research/lab/b",
+      "project": "b",
+      "tmux": "cst-lab:@27.%51",
+      "version": "2.1.311",
+      "startedAt": 1793052204128,
+      "status": "idle",
+      "statusAt": 1793052204325,
+      "waitingFor": null,
+      "title": "lab-b",
+      "lastPrompt": null,
+      "permissionMode": "default",
+      "latestStep": {
+        "kind": "reply",
+        "summary": "I sent \"ack\" back to the constellation session. Like the earlier pong, it's queued in that session's",
+        "at": "2026-10-26T21:59:58.748Z"
+      },
+      "turnOpen": false,
+      "awaySummary": null,
+      "costUSD": 0.0086629,
+      "context": {
+        "model": "claude-haiku-5-5",
+        "usedTokens": 53038,
+        "windowTokens": 1000000,
+        "percent": 5.3
+      },
+      "compactions": 0,
+      "prLinks": [],
+      "transcript": {
+        "path": "/home/pedro/.claude/projects/-home-pedro-github-Constellation-research-lab-b/63574ae0-4e20-401a-a3af-b3d4cef4d5ec.jsonl",
+        "exists": true,
+        "bytes": 559722
+      },
+      "processes": {
+        "count": 7,
+        "rssBytes": 675610624,
+        "gpuBytes": 0
+      }
+    },
+    {
+      "id": "cc5e4a15-9769-4ae1-9978-246739433a2a",
+      "pid": 3147233,
+      "name": "lab-a ⑂",
+      "nameSource": "auto",
+      "kind": "bg",
+      "cwd": "/home/pedro/github/Constellation/research/lab/a",
+      "project": "a",
+      "tmux": null,
+      "version": "2.1.311",
+      "startedAt": 1793052175130,
+      "status": "idle",
+      "statusAt": 1793052175628,
+      "waitingFor": null,
+      "title": "lab-a ⑂",
+      "lastPrompt": "say hi in one word",
+      "permissionMode": "default",
+      "latestStep": {
+        "kind": "reply",
+        "summary": "Hi",
+        "at": "2026-10-26T22:02:49.068Z"
+      },
+      "turnOpen": true,
+      "awaySummary": null,
+      "costUSD": null,
+      "context": {
+        "model": "claude-haiku-5-5",
+        "usedTokens": 49345,
+        "windowTokens": 1000000,
+        "percent": 4.9
+      },
+      "compactions": 0,
+      "prLinks": [],
+      "transcript": {
+        "path": "/home/pedro/.claude/projects/-home-pedro-github-Constellation-research-lab-a/cc5e4a15-9769-4ae1-9978-246739433a2a.jsonl",
+        "exists": true,
+        "bytes": 269904
+      },
+      "processes": {
+        "count": 7,
+        "rssBytes": 680923136,
+        "gpuBytes": 0
+      }
+    },
+    {
+      "id": "8bd8f76e-b68f-4783-a208-cb0090aa1c56",
+      "pid": 3112238,
+      "name": "lab-a",
+      "nameSource": "user",
+      "kind": "interactive",
+      "cwd": "/home/pedro/github/Constellation/research/lab/a",
+      "project": "a",
+      "tmux": "cst-lab:@25.%49",
+      "version": "2.1.311",
+      "startedAt": 1793051822613,
+      "status": "idle",
+      "statusAt": 1793052174803,
+      "waitingFor": null,
+      "title": "lab-a",
+      "lastPrompt": "say hi in one word",
+      "permissionMode": null,
+      "latestStep": {
+        "kind": "reply",
+        "summary": "Hi",
+        "at": "2026-10-26T22:02:49.068Z"
+      },
+      "turnOpen": false,
+      "awaySummary": null,
+      "costUSD": 0.0038704800000000004,
+      "context": {
+        "model": "claude-haiku-5-5",
+        "usedTokens": 49345,
+        "windowTokens": 1000000,
+        "percent": 4.9
+      },
+      "compactions": 0,
+      "prLinks": [],
+      "transcript": {
+        "path": "/home/pedro/.claude/projects/-home-pedro-github-Constellation-research-lab-a/8bd8f76e-b68f-4783-a208-cb0090aa1c56.jsonl",
+        "exists": true,
+        "bytes": 415270
+      },
+      "processes": {
+        "count": 18,
+        "rssBytes": 1857974272,
+        "gpuBytes": 0
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "8bd8f76e-b68f-4783-a208-cb0090aa1c56",
+      "to": "63574ae0-4e20-401a-a3af-b3d4cef4d5ec",
+      "count": 1,
+      "lastAt": "2026-10-26T21:58:55.086Z",
+      "msgIds": [
+        "9184e85b-f6f0-487d-9f3f-95a02f4db15e"
+      ],
+      "lastSummary": null
+    },
+    {
+      "from": "endpoint:constellation",
+      "to": "63574ae0-4e20-401a-a3af-b3d4cef4d5ec",
+      "count": 1,
+      "lastAt": "2026-10-26T21:59:56.049Z",
+      "msgIds": [
+        "775b21cd-48dd-4e82-a4e9-e80f4011b262"
+      ],
+      "lastSummary": null
+    },
+    {
+      "from": "63574ae0-4e20-401a-a3af-b3d4cef4d5ec",
+      "to": "8bd8f76e-b68f-4783-a208-cb0090aa1c56",
+      "count": 1,
+      "lastAt": "2026-10-26T21:59:00.335Z",
+      "msgIds": [
+        "01d6d856-6127-4ffc-a3fd-5db9999e2d9c"
+      ],
+      "lastSummary": "Reply pong to lab-a"
+    },
+    {
+      "from": "63574ae0-4e20-401a-a3af-b3d4cef4d5ec",
+      "to": "endpoint:constellation",
+      "count": 1,
+      "lastAt": "2026-10-26T21:59:57.701Z",
+      "msgIds": [
+        "d0adc062-3efa-4213-bf54-085d2e09db0c"
+      ],
+      "lastSummary": "Reply ack to constellation"
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "endpoint:constellation",
+      "name": "constellation",
+      "addresses": [
+        "uds:/run/user/1000/cc-socks/cst-sniff.sock"
+      ]
+    }
+  ],
+  "subagents": []
+}

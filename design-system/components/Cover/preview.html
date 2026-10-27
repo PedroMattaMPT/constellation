@@ -1,0 +1,65 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Constellation</title>
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-mono); overflow: hidden; font-variant-ligatures: none; }
+  .cover { position: relative; width: 960px; height: 288px; overflow: hidden; }
+  .band { position: absolute; left: var(--cell-3); top: var(--cell-3); width: 912px; height: 112px; }
+  .band svg { display: block; width: 912px; height: 112px; }
+  .brand { fill: var(--fill-brand); }
+  .calm { fill: var(--res-normal); }
+  .link { fill: var(--edge); }
+  .needs { fill: var(--status-waiting-fill); }
+  .dot { fill: var(--fg-faint); }
+  .star { fill: var(--fg-strong); }
+  .line { stroke: var(--edge); fill: none; stroke-linecap: round; }
+  .w1 { stroke-width: var(--edge-1); }
+  .w2 { stroke-width: var(--edge-2); }
+  .words { position: absolute; left: var(--cell-3); right: var(--cell-3); bottom: var(--cell-3); }
+  .name { margin: 0; font-size: 64px; line-height: 0.95; font-weight: 700; letter-spacing: -0.01em; color: var(--fg-strong); }
+  .tag { margin: var(--cell-1) 0 0; font-size: 14px; line-height: 20px; color: var(--fg-muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="band" aria-hidden="true">
+<svg viewBox="0 0 912 112" width="912" height="112">
+<!--
+  blocks      fill-brand 264×112 (starlight, the largest: your voice and focus) · res-normal 96×40 · edge 168×72 (teal constellation lines) · status-waiting-fill 48×24 once (the only amber fill) — ≈ 35 % of 960×288, square corners (radius-0: tiles)
+  arrangement top-band skeleton (the name is 13 mono letters, wider than 440 px at 64 px); a strip of unequal blocks bottom-aligned on one line, cell-1 gutters, like the status bar
+  pattern     a literal constellation, from "sessions as stars, links as constellation lines": a dot grid at 4 cells × 1 line, five stars on it joined by edge-1 and edge-2 lines
+  scales      sides in cell-1 (8 px) multiples; gutters cell-1; dot pitch 4 × cell-1 by row-1; strokes edge-1, edge-2; insets cell-3
+-->
+<rect class="brand" x="0" y="0" width="264" height="112"/>
+<rect class="calm" x="272" y="72" width="96" height="40"/>
+<rect class="link" x="376" y="40" width="168" height="72"/>
+<rect class="needs" x="864" y="88" width="48" height="24"/>
+<g>
+<circle class="dot" cx="568" cy="12" r="1.5"/><circle class="dot" cx="600" cy="12" r="1.5"/><circle class="dot" cx="632" cy="12" r="1.5"/><circle class="dot" cx="664" cy="12" r="1.5"/><circle class="dot" cx="696" cy="12" r="1.5"/><circle class="dot" cx="728" cy="12" r="1.5"/><circle class="dot" cx="760" cy="12" r="1.5"/><circle class="dot" cx="792" cy="12" r="1.5"/><circle class="dot" cx="824" cy="12" r="1.5"/>
+<circle class="dot" cx="568" cy="32" r="1.5"/><circle class="dot" cx="632" cy="32" r="1.5"/><circle class="dot" cx="664" cy="32" r="1.5"/><circle class="dot" cx="696" cy="32" r="1.5"/><circle class="dot" cx="728" cy="32" r="1.5"/><circle class="dot" cx="760" cy="32" r="1.5"/><circle class="dot" cx="792" cy="32" r="1.5"/><circle class="dot" cx="824" cy="32" r="1.5"/>
+<circle class="dot" cx="568" cy="52" r="1.5"/><circle class="dot" cx="600" cy="52" r="1.5"/><circle class="dot" cx="632" cy="52" r="1.5"/><circle class="dot" cx="664" cy="52" r="1.5"/><circle class="dot" cx="696" cy="52" r="1.5"/><circle class="dot" cx="728" cy="52" r="1.5"/><circle class="dot" cx="792" cy="52" r="1.5"/><circle class="dot" cx="824" cy="52" r="1.5"/>
+<circle class="dot" cx="568" cy="72" r="1.5"/><circle class="dot" cx="600" cy="72" r="1.5"/><circle class="dot" cx="632" cy="72" r="1.5"/><circle class="dot" cx="696" cy="72" r="1.5"/><circle class="dot" cx="728" cy="72" r="1.5"/><circle class="dot" cx="760" cy="72" r="1.5"/><circle class="dot" cx="792" cy="72" r="1.5"/>
+<circle class="dot" cx="568" cy="92" r="1.5"/><circle class="dot" cx="600" cy="92" r="1.5"/><circle class="dot" cx="632" cy="92" r="1.5"/><circle class="dot" cx="664" cy="92" r="1.5"/><circle class="dot" cx="696" cy="92" r="1.5"/><circle class="dot" cx="728" cy="92" r="1.5"/><circle class="dot" cx="760" cy="92" r="1.5"/>
+</g>
+<path class="line w1" d="M 600 32 L 664 72"/>
+<path class="line w2" d="M 664 72 L 760 52"/>
+<path class="line w1" d="M 760 52 L 824 92"/>
+<path class="line w1" d="M 600 32 L 600 12"/>
+<circle class="star" cx="600" cy="32" r="3"/>
+<circle class="star" cx="664" cy="72" r="3.5"/>
+<circle class="star" cx="760" cy="52" r="3"/>
+<circle class="star" cx="824" cy="92" r="3"/>
+<circle class="star" cx="600" cy="12" r="2.5"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">Constellation</h1>
+<p class="tag">One control room for every running coding session, in the terminal and on the web.</p>
+</div>
+</div>
+</body>
+</html>

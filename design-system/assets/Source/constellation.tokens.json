@@ -1,0 +1,1562 @@
+{
+  "name": "Constellation",
+  "version": "1.0.0",
+  "about": "Single source of truth for Constellation's terminal UI (Textual) and web UI (React). Edit this file, then run build_tokens.py; never edit the generated files by hand.",
+  "themes": [
+    {
+      "id": "dark",
+      "name": "Dark",
+      "dark": true
+    },
+    {
+      "id": "light",
+      "name": "Light",
+      "dark": false
+    }
+  ],
+  "palette": {
+    "ground": {
+      "dark": "#0a0c10",
+      "light": "#f6f7fa",
+      "note": "App background, the night sky.",
+      "x256": {
+        "dark": 233,
+        "light": 255
+      }
+    },
+    "ground-1": {
+      "dark": "#0f1218",
+      "light": "#ffffff",
+      "note": "Pane and canvas body.",
+      "x256": {
+        "dark": 234,
+        "light": 231
+      }
+    },
+    "ground-2": {
+      "dark": "#141821",
+      "light": "#eef0f5",
+      "note": "Sidebars, status bar, status lines.",
+      "x256": {
+        "dark": 235,
+        "light": 254
+      }
+    },
+    "ground-3": {
+      "dark": "#1a1f2a",
+      "light": "#ffffff",
+      "note": "Cards, nodes, menus, dialogs.",
+      "x256": {
+        "dark": 236,
+        "light": 231
+      }
+    },
+    "ground-hover": {
+      "dark": "#1e2431",
+      "light": "#e7eaf1",
+      "note": "Web hover only."
+    },
+    "ground-sel": {
+      "dark": "#26304f",
+      "light": "#e3e8fb",
+      "note": "Selection and cursor row, tinted with starlight.",
+      "x256": {
+        "dark": 237,
+        "light": 195
+      }
+    },
+    "ink": {
+      "dark": "#e3e7ee",
+      "light": "#1a1e28"
+    },
+    "ink-strong": {
+      "dark": "#f6f8fc",
+      "light": "#07090d"
+    },
+    "ink-muted": {
+      "dark": "#97a0b2",
+      "light": "#566074"
+    },
+    "ink-faint": {
+      "dark": "#687186",
+      "light": "#7c8496"
+    },
+    "rule": {
+      "dark": "#252b38",
+      "light": "#dfe2e9"
+    },
+    "rule-strong": {
+      "dark": "#343c4d",
+      "light": "#c9ced8"
+    },
+    "rule-control": {
+      "dark": "#666f85",
+      "light": "#7a8396"
+    },
+    "star": {
+      "dark": "#b3c1ff",
+      "light": "#3646b3",
+      "note": "Starlight: brand, focus, your own voice."
+    },
+    "sky": {
+      "dark": "#5cb4f0",
+      "light": "#0b67a6",
+      "note": "Work in progress."
+    },
+    "amber": {
+      "dark": "#f5a524",
+      "light": "#855300",
+      "note": "Needs you. Text form; the fill is amber-fill."
+    },
+    "vermillion": {
+      "dark": "#ff6b45",
+      "light": "#b42d0c",
+      "note": "Danger and failure."
+    },
+    "rose": {
+      "dark": "#ec8cc4",
+      "light": "#a8306f",
+      "note": "Forgotten (stale) sessions."
+    },
+    "green": {
+      "dark": "#4cc790",
+      "light": "#146e45",
+      "note": "Safe and resolved."
+    },
+    "teal": {
+      "dark": "#45c4c4",
+      "light": "#0a6c75",
+      "note": "Constellation lines: messages between sessions."
+    },
+    "violet": {
+      "dark": "#b994ff",
+      "light": "#6b3fd0",
+      "note": "Elevated autonomy (accept edits, auto)."
+    },
+    "slate": {
+      "dark": "#8e9ab4",
+      "light": "#545f77",
+      "note": "Watched, not yours (external sessions)."
+    },
+    "cobalt": {
+      "dark": "#7f97cc",
+      "light": "#4a6293",
+      "note": "Calm resource readings."
+    },
+    "amber-fill": {
+      "dark": "#f5a524",
+      "light": "#f2a228"
+    },
+    "on-amber-fill": {
+      "dark": "#15100a",
+      "light": "#15100a"
+    },
+    "vermillion-fill": {
+      "dark": "#ff6b45",
+      "light": "#c4320c"
+    },
+    "on-vermillion-fill": {
+      "dark": "#0a0c10",
+      "light": "#ffffff"
+    },
+    "violet-fill": {
+      "dark": "#b994ff",
+      "light": "#6b3fd0"
+    },
+    "on-violet-fill": {
+      "dark": "#0a0c10",
+      "light": "#ffffff"
+    },
+    "star-fill": {
+      "dark": "#b3c1ff",
+      "light": "#3949b8"
+    },
+    "on-star-fill": {
+      "dark": "#0a0c10",
+      "light": "#ffffff"
+    }
+  },
+  "tokens": [
+    {
+      "group": "Surfaces",
+      "name": "bg",
+      "ref": "ground",
+      "role": "surface",
+      "ansi": "default",
+      "textual": "background",
+      "usage": "App background behind everything; the sky the map floats on."
+    },
+    {
+      "group": "Surfaces",
+      "name": "surface",
+      "ref": "ground-1",
+      "role": "surface",
+      "ansi": "default",
+      "textual": "surface",
+      "usage": "Pane bodies, conversation and map canvas."
+    },
+    {
+      "group": "Surfaces",
+      "name": "panel",
+      "ref": "ground-2",
+      "role": "surface",
+      "ansi": "default",
+      "textual": "panel",
+      "usage": "Tree sidebar, global status bar, pane status lines, prompt box."
+    },
+    {
+      "group": "Surfaces",
+      "name": "raised",
+      "ref": "ground-3",
+      "role": "surface",
+      "ansi": "default",
+      "usage": "Session nodes, question and permission cards, menus, dialogs. Light theme sets it apart with line-strong, not shade."
+    },
+    {
+      "group": "Surfaces",
+      "name": "hover",
+      "ref": "ground-hover",
+      "role": "surface",
+      "ansi": "default",
+      "usage": "Web pointer hover on rows and chips. The TUI has no hover state."
+    },
+    {
+      "group": "Surfaces",
+      "name": "selection",
+      "ref": "ground-sel",
+      "role": "surface",
+      "ansi": "default",
+      "ansi_style": "reverse",
+      "usage": "Selected rows, the tree cursor, chosen options, multi-select picks. 16-color: reverse video."
+    },
+    {
+      "group": "Text",
+      "name": "fg",
+      "ref": "ink",
+      "role": "text",
+      "ansi": "default",
+      "textual": "foreground",
+      "usage": "Body text and conversation, on bg, surface, panel, raised and selection."
+    },
+    {
+      "group": "Text",
+      "name": "fg-strong",
+      "ref": "ink-strong",
+      "role": "text",
+      "ansi": "default",
+      "ansi_style": "bold",
+      "usage": "Session names, the focused pane title, chosen values; always bold. On every surface."
+    },
+    {
+      "group": "Text",
+      "name": "fg-muted",
+      "ref": "ink-muted",
+      "role": "text",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "Metadata (project, branch, times, counts), tool output, secondary labels; the TUI's dim. On every surface."
+    },
+    {
+      "group": "Text",
+      "name": "fg-faint",
+      "ref": "ink-faint",
+      "role": "mark",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "Disabled controls, tree guides, placeholder text. Never for information you need: 3:1 only."
+    },
+    {
+      "group": "Lines",
+      "name": "line",
+      "ref": "rule",
+      "role": "decor",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "Unfocused pane borders and hairline dividers. Decorative; position already says where a pane ends."
+    },
+    {
+      "group": "Lines",
+      "name": "line-strong",
+      "ref": "rule-strong",
+      "role": "decor",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "Card and node outlines in the light theme, menu borders, context-bar track."
+    },
+    {
+      "group": "Lines",
+      "name": "line-control",
+      "ref": "rule-control",
+      "role": "mark",
+      "ansi": "default",
+      "usage": "Borders that identify a control: prompt box, inputs, option boxes. 3:1 on every surface."
+    },
+    {
+      "group": "Focus",
+      "name": "focus",
+      "ref": "star",
+      "role": "mark",
+      "ansi": "default",
+      "ansi_style": "bold",
+      "textual": "primary",
+      "usage": "Focused pane border (TUI heavy line, web 2px), focus ring, tree cursor bar. 16-color: heavy border + bold title."
+    },
+    {
+      "group": "Focus",
+      "name": "brand",
+      "ref": "star",
+      "role": "text",
+      "ansi": "blue",
+      "usage": "The wordmark and the prefix indicator. Never decoration."
+    },
+    {
+      "group": "Focus",
+      "name": "fill-brand",
+      "ref": "star-fill",
+      "role": "fill",
+      "on": "on-fill-brand",
+      "ansi": "blue",
+      "ansi_style": "bold",
+      "usage": "Prefix-active indicator and the primary action in a dialog."
+    },
+    {
+      "group": "Focus",
+      "name": "on-fill-brand",
+      "ref": "on-star-fill",
+      "role": "on",
+      "ansi": "bright_white",
+      "usage": "Text on fill-brand.",
+      "ansi_style": "bold"
+    },
+    {
+      "group": "Status",
+      "name": "status-working",
+      "ref": "sky",
+      "role": "text",
+      "ansi": "blue",
+      "usage": "● working: the glyph, the word, the activity spinner. On every surface."
+    },
+    {
+      "group": "Status",
+      "name": "status-waiting",
+      "ref": "amber",
+      "role": "text",
+      "ansi": "yellow",
+      "ansi_style": "bold",
+      "usage": "Text form of ? needs you, for flags inside a line. Prefer the fill."
+    },
+    {
+      "group": "Status",
+      "name": "status-waiting-fill",
+      "ref": "amber-fill",
+      "role": "fill",
+      "on": "on-status-waiting-fill",
+      "ansi": "yellow",
+      "ansi_style": "bold",
+      "textual": "warning",
+      "usage": "The ? needs you chip. The only amber fill in the product: if it is amber and filled, a session is waiting for you."
+    },
+    {
+      "group": "Status",
+      "name": "on-status-waiting-fill",
+      "ref": "on-amber-fill",
+      "role": "on",
+      "ansi": "black",
+      "usage": "Text on status-waiting-fill.",
+      "ansi_style": "bold"
+    },
+    {
+      "group": "Status",
+      "name": "status-idle",
+      "ref": "ink-muted",
+      "role": "text",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "○ idle: finished its turn, nothing pending."
+    },
+    {
+      "group": "Status",
+      "name": "status-stale",
+      "ref": "rose",
+      "role": "text",
+      "ansi": "magenta",
+      "usage": "◌ stale: idle past the forgotten threshold (default 30 min). Glyph, word and age in rose."
+    },
+    {
+      "group": "Status",
+      "name": "status-error",
+      "ref": "vermillion",
+      "role": "text",
+      "ansi": "red",
+      "ansi_style": "bold",
+      "textual": "error",
+      "usage": "× error: the turn or the process failed."
+    },
+    {
+      "group": "Status",
+      "name": "status-stopped",
+      "ref": "ink-muted",
+      "role": "text",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "■ stopped: exiting or exited; shown in the launcher and resume picker, then leaves the map."
+    },
+    {
+      "group": "Modes",
+      "name": "mode-default",
+      "ref": "ink-muted",
+      "role": "text",
+      "ansi": "default",
+      "usage": "· default (Claude Code's manual): asks before edits and commands."
+    },
+    {
+      "group": "Modes",
+      "name": "mode-plan",
+      "ref": "green",
+      "role": "text",
+      "ansi": "green",
+      "usage": "‖ plan: reads only until you approve a plan."
+    },
+    {
+      "group": "Modes",
+      "name": "mode-edits",
+      "ref": "violet",
+      "role": "text",
+      "ansi": "magenta",
+      "usage": "± accept edits: file edits go through without asking."
+    },
+    {
+      "group": "Modes",
+      "name": "mode-auto",
+      "ref": "violet-fill",
+      "role": "fill",
+      "on": "on-mode-auto",
+      "ansi": "magenta",
+      "ansi_style": "bold",
+      "usage": "» auto: a classifier approves most actions. Filled chip: runs commands without you."
+    },
+    {
+      "group": "Modes",
+      "name": "on-mode-auto",
+      "ref": "on-violet-fill",
+      "role": "on",
+      "ansi": "bright_white",
+      "usage": "Text on mode-auto.",
+      "ansi_style": "bold"
+    },
+    {
+      "group": "Modes",
+      "name": "mode-bypass",
+      "ref": "vermillion-fill",
+      "role": "fill",
+      "on": "on-mode-bypass",
+      "ansi": "red",
+      "ansi_style": "bold",
+      "usage": "! bypass permissions: nothing is checked. Filled vermillion chip plus the hazard edge on the pane and node."
+    },
+    {
+      "group": "Modes",
+      "name": "on-mode-bypass",
+      "ref": "on-vermillion-fill",
+      "role": "on",
+      "ansi": "bright_white",
+      "usage": "Text on mode-bypass.",
+      "ansi_style": "bold"
+    },
+    {
+      "group": "Modes",
+      "name": "mode-dontask",
+      "ref": "slate",
+      "role": "text",
+      "ansi": "cyan",
+      "usage": "∅ don't ask: never waits; anything that would ask is denied. Shown with a denied count."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-prompt",
+      "ref": "star",
+      "role": "text",
+      "ansi": "default",
+      "ansi_style": "bold",
+      "usage": "› your prompt (one per turn). Starlight is your voice."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-slash",
+      "ref": "star",
+      "role": "text",
+      "ansi": "default",
+      "ansi_style": "bold",
+      "usage": "/ slash command you ran."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-tool",
+      "ref": "sky",
+      "role": "text",
+      "ansi": "blue",
+      "usage": "λ tool call (Bash, Edit, Read, Agent …): the glyph and tool name; arguments stay fg-muted."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-question",
+      "ref": "amber",
+      "role": "text",
+      "ansi": "yellow",
+      "usage": "? question or permission asked. Bold while unanswered."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-answer",
+      "ref": "green",
+      "role": "text",
+      "ansi": "green",
+      "usage": "✓ question answered, permission allowed."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-denied",
+      "ref": "vermillion",
+      "role": "text",
+      "ansi": "red",
+      "usage": "× permission denied, tool failed."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-sent",
+      "ref": "teal",
+      "role": "text",
+      "ansi": "cyan",
+      "usage": "→ message sent to another session."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-received",
+      "ref": "teal",
+      "role": "text",
+      "ansi": "cyan",
+      "usage": "← message received from another session (also every message to an external session from you)."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-subagent",
+      "ref": "teal",
+      "role": "text",
+      "ansi": "cyan",
+      "usage": "◦ subagent started, ↑ subagent reported back."
+    },
+    {
+      "group": "Messages",
+      "name": "msg-reply",
+      "ref": "ink",
+      "role": "text",
+      "ansi": "default",
+      "usage": "¶ the agent's reply text."
+    },
+    {
+      "group": "Resources",
+      "name": "res-normal",
+      "ref": "cobalt",
+      "role": "mark",
+      "ansi": "default",
+      "usage": "Sparkline bars and context fill below the warning threshold."
+    },
+    {
+      "group": "Resources",
+      "name": "res-warning",
+      "ref": "amber",
+      "role": "text",
+      "ansi": "yellow",
+      "usage": "△ warning: context ≥ 80 %, CPU busy > 5 min, memory/GPU ≥ 80 % of its limit. Text and bars, never a fill."
+    },
+    {
+      "group": "Resources",
+      "name": "res-critical",
+      "ref": "vermillion",
+      "role": "text",
+      "ansi": "red",
+      "ansi_style": "bold",
+      "usage": "▲ critical: context ≥ 95 %, a limit passed. Bars and text."
+    },
+    {
+      "group": "Resources",
+      "name": "res-critical-fill",
+      "ref": "vermillion-fill",
+      "role": "fill",
+      "on": "on-res-critical-fill",
+      "ansi": "red",
+      "ansi_style": "bold",
+      "usage": "The ▲ chip in the status bar and on nodes when a limit is passed."
+    },
+    {
+      "group": "Resources",
+      "name": "on-res-critical-fill",
+      "ref": "on-vermillion-fill",
+      "role": "on",
+      "ansi": "bright_white",
+      "usage": "Text on res-critical-fill.",
+      "ansi_style": "bold"
+    },
+    {
+      "group": "Resources",
+      "name": "res-track",
+      "ref": "rule-strong",
+      "role": "decor",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "Empty part of the context bar and sparkline baseline."
+    },
+    {
+      "group": "Kinds",
+      "name": "kind-managed",
+      "ref": "star",
+      "role": "mark",
+      "ansi": "default",
+      "ansi_style": "bold",
+      "usage": "◆ managed (started here, full control): the glyph; node and pane borders stay solid."
+    },
+    {
+      "group": "Kinds",
+      "name": "kind-external",
+      "ref": "slate",
+      "role": "text",
+      "ansi": "cyan",
+      "usage": "◇ external (started elsewhere, watched): the glyph, the ext tag and the dashed border."
+    },
+    {
+      "group": "Links",
+      "name": "edge",
+      "ref": "teal",
+      "role": "mark",
+      "ansi": "cyan",
+      "usage": "Message edges on the map and link lanes in the TUI; weight shows volume."
+    },
+    {
+      "group": "Links",
+      "name": "edge-subagent",
+      "ref": "slate",
+      "role": "mark",
+      "ansi": "default",
+      "ansi_style": "dim",
+      "usage": "Parent to subagent links (dotted)."
+    }
+  ],
+  "glyphs": {
+    "note": "unicode = default tier (renders in DejaVu Sans Mono, JetBrains Mono, Hack, Fira Code, Source Code Pro or falls back cleanly); ascii = fallback when CONSTELLATION_GLYPHS=ascii or the locale is not UTF-8; nerd = optional, only when a Nerd Font is configured.",
+    "status": {
+      "working": {
+        "unicode": "●",
+        "ascii": "*",
+        "nerd": "",
+        "label": "working"
+      },
+      "waiting": {
+        "unicode": "?",
+        "ascii": "?",
+        "nerd": "",
+        "label": "needs you"
+      },
+      "idle": {
+        "unicode": "○",
+        "ascii": "o",
+        "nerd": "",
+        "label": "idle"
+      },
+      "stale": {
+        "unicode": "◌",
+        "ascii": "~",
+        "nerd": "",
+        "label": "stale"
+      },
+      "error": {
+        "unicode": "×",
+        "ascii": "x",
+        "nerd": "",
+        "label": "error"
+      },
+      "stopped": {
+        "unicode": "■",
+        "ascii": "#",
+        "nerd": "",
+        "label": "stopped"
+      }
+    },
+    "spinner": {
+      "unicode": [
+        "▖",
+        "▘",
+        "▝",
+        "▗"
+      ],
+      "ascii": [
+        "-",
+        "\\",
+        "|",
+        "/"
+      ],
+      "interval_ms": 120
+    },
+    "kind": {
+      "managed": {
+        "unicode": "◆",
+        "ascii": "+",
+        "nerd": "",
+        "label": "managed"
+      },
+      "external": {
+        "unicode": "◇",
+        "ascii": ":",
+        "nerd": "",
+        "label": "ext"
+      }
+    },
+    "mode": {
+      "default": {
+        "unicode": "·",
+        "ascii": ".",
+        "nerd": "",
+        "label": "default"
+      },
+      "plan": {
+        "unicode": "‖",
+        "ascii": "=",
+        "nerd": "",
+        "label": "plan"
+      },
+      "acceptEdits": {
+        "unicode": "±",
+        "ascii": "+",
+        "nerd": "",
+        "label": "edits"
+      },
+      "auto": {
+        "unicode": "»",
+        "ascii": ">",
+        "nerd": "",
+        "label": "auto"
+      },
+      "bypassPermissions": {
+        "unicode": "!",
+        "ascii": "!",
+        "nerd": "",
+        "label": "BYPASS"
+      },
+      "dontAsk": {
+        "unicode": "∅",
+        "ascii": "0",
+        "nerd": "",
+        "label": "no-ask"
+      }
+    },
+    "message": {
+      "project": {
+        "unicode": "⌂",
+        "ascii": "=",
+        "nerd": "",
+        "label": "project"
+      },
+      "prompt": {
+        "unicode": "›",
+        "ascii": "$",
+        "nerd": "",
+        "label": "prompt"
+      },
+      "slash": {
+        "unicode": "/",
+        "ascii": "/",
+        "nerd": "/",
+        "label": "command"
+      },
+      "tool": {
+        "unicode": "λ",
+        "ascii": "&",
+        "nerd": "",
+        "label": "tool"
+      },
+      "question": {
+        "unicode": "?",
+        "ascii": "?",
+        "nerd": "",
+        "label": "asked"
+      },
+      "answer": {
+        "unicode": "✓",
+        "ascii": "v",
+        "nerd": "",
+        "label": "answered"
+      },
+      "denied": {
+        "unicode": "×",
+        "ascii": "x",
+        "nerd": "",
+        "label": "denied"
+      },
+      "sent": {
+        "unicode": "→",
+        "ascii": ">",
+        "nerd": "",
+        "label": "sent"
+      },
+      "received": {
+        "unicode": "←",
+        "ascii": "<",
+        "nerd": "",
+        "label": "received"
+      },
+      "subagent_started": {
+        "unicode": "◦",
+        "ascii": "+",
+        "nerd": "",
+        "label": "subagent"
+      },
+      "subagent_reported": {
+        "unicode": "↑",
+        "ascii": "^",
+        "nerd": "",
+        "label": "reported"
+      },
+      "reply": {
+        "unicode": "¶",
+        "ascii": "\"",
+        "nerd": "",
+        "label": "reply"
+      }
+    },
+    "alert": {
+      "normal": {
+        "unicode": "·",
+        "ascii": ".",
+        "nerd": "",
+        "label": "ok"
+      },
+      "warning": {
+        "unicode": "△",
+        "ascii": "^",
+        "nerd": "",
+        "label": "warn"
+      },
+      "critical": {
+        "unicode": "▲",
+        "ascii": "!",
+        "nerd": "",
+        "label": "CRIT"
+      }
+    },
+    "tree": {
+      "collapsed": {
+        "unicode": "▸",
+        "ascii": "+"
+      },
+      "expanded": {
+        "unicode": "▾",
+        "ascii": "-"
+      },
+      "branch": {
+        "unicode": "├─",
+        "ascii": "|-"
+      },
+      "last": {
+        "unicode": "└─",
+        "ascii": "`-"
+      },
+      "pipe": {
+        "unicode": "│ ",
+        "ascii": "| "
+      },
+      "cursor": {
+        "unicode": "▌",
+        "ascii": ">"
+      }
+    },
+    "graph": {
+      "edge_light": {
+        "unicode": "─",
+        "ascii": "-",
+        "label": "1–2 messages"
+      },
+      "edge_heavy": {
+        "unicode": "━",
+        "ascii": "=",
+        "label": "3–9 messages"
+      },
+      "edge_double": {
+        "unicode": "═",
+        "ascii": "#",
+        "label": "10+ messages"
+      },
+      "lane_light": {
+        "unicode": "│",
+        "ascii": "|"
+      },
+      "lane_heavy": {
+        "unicode": "┃",
+        "ascii": "|"
+      },
+      "lane_double": {
+        "unicode": "║",
+        "ascii": "H"
+      },
+      "arrow_in": {
+        "unicode": "◂",
+        "ascii": "<"
+      },
+      "arrow_out": {
+        "unicode": "▸",
+        "ascii": ">"
+      },
+      "corner": {
+        "unicode": "╭╮╰╯",
+        "ascii": "++++"
+      },
+      "dashed": {
+        "unicode": "┄┆",
+        "ascii": "-:"
+      },
+      "subagent": {
+        "unicode": "└◦",
+        "ascii": "`+"
+      }
+    },
+    "meter": {
+      "bar": {
+        "unicode": [
+          "▏",
+          "▎",
+          "▍",
+          "▌",
+          "▋",
+          "▊",
+          "▉",
+          "█"
+        ],
+        "ascii": [
+          "#"
+        ],
+        "track": {
+          "unicode": " ",
+          "ascii": "-"
+        },
+        "caps": {
+          "unicode": "▕▏",
+          "ascii": "[]"
+        }
+      },
+      "spark": {
+        "unicode": [
+          "▁",
+          "▂",
+          "▃",
+          "▄",
+          "▅",
+          "▆",
+          "▇",
+          "█"
+        ],
+        "ascii": [
+          "_",
+          ".",
+          "-",
+          "-",
+          "=",
+          "=",
+          "#",
+          "#"
+        ]
+      }
+    },
+    "misc": {
+      "branch": {
+        "unicode": "@",
+        "ascii": "@",
+        "nerd": ""
+      },
+      "separator": {
+        "unicode": "│",
+        "ascii": "|"
+      },
+      "ellipsis": {
+        "unicode": "…",
+        "ascii": "~"
+      },
+      "radio_on": {
+        "unicode": "(●)",
+        "ascii": "(*)"
+      },
+      "radio_off": {
+        "unicode": "( )",
+        "ascii": "( )"
+      },
+      "check_on": {
+        "unicode": "[x]",
+        "ascii": "[x]"
+      },
+      "check_off": {
+        "unicode": "[ ]",
+        "ascii": "[ ]"
+      },
+      "image": {
+        "unicode": "▣",
+        "ascii": "[img]",
+        "nerd": ""
+      },
+      "mcp": {
+        "unicode": "mcp",
+        "ascii": "mcp",
+        "nerd": ""
+      }
+    }
+  },
+  "spacing": {
+    "note": "Web lengths are cell multiples: 1 cell = 8px (≈1ch of the 13px mono face), 1 line = 20px. The TUI uses the same counts in cells and lines.",
+    "tokens": [
+      {
+        "name": "cell-1",
+        "value": "8px",
+        "cells": "1",
+        "usage": "Glyph-to-label gap, pane and row inner padding (TUI: 1 cell, padding 0 1)."
+      },
+      {
+        "name": "cell-2",
+        "value": "16px",
+        "cells": "2",
+        "usage": "One tree indent level; gap between chips in the status bar."
+      },
+      {
+        "name": "cell-3",
+        "value": "24px",
+        "cells": "3",
+        "usage": "Card inner padding on the web (TUI: 1 cell plus the border)."
+      },
+      {
+        "name": "cell-4",
+        "value": "32px",
+        "cells": "4",
+        "usage": "Gutter between project clusters on the map."
+      },
+      {
+        "name": "row-half",
+        "value": "10px",
+        "cells": "–",
+        "usage": "Web-only vertical breathing inside cards. No TUI equivalent, so never between rows."
+      },
+      {
+        "name": "row-1",
+        "value": "20px",
+        "cells": "1 line",
+        "usage": "Row height: tree rows, menu items, status bar, status line, conversation line height."
+      },
+      {
+        "name": "row-2",
+        "value": "40px",
+        "cells": "2 lines",
+        "usage": "A compact session node; one map lane."
+      }
+    ]
+  },
+  "radius": {
+    "note": "Square means tiled, rounded means floating. TUI: square = solid/heavy/dashed borders, rounded = round (╭╮).",
+    "tokens": [
+      {
+        "name": "radius-0",
+        "value": "0",
+        "usage": "Panes, sidebars, status bar, status lines: everything tiled."
+      },
+      {
+        "name": "radius-chip",
+        "value": "2px",
+        "usage": "Status, mode and key chips."
+      },
+      {
+        "name": "radius-card",
+        "value": "4px",
+        "usage": "Session nodes, question and permission cards, menus, dialogs (TUI round border)."
+      }
+    ]
+  },
+  "stroke": {
+    "note": "Line weights. TUI maps them to box-drawing weights: light ─, heavy ━, double ═.",
+    "tokens": [
+      {
+        "name": "stroke-hair",
+        "value": "1px",
+        "usage": "Every border at rest (TUI light line)."
+      },
+      {
+        "name": "stroke-focus",
+        "value": "2px",
+        "usage": "Focused pane, focused node, focus ring (TUI heavy line)."
+      },
+      {
+        "name": "edge-1",
+        "value": "1.25px",
+        "usage": "Message edge with 1–2 messages (TUI ─)."
+      },
+      {
+        "name": "edge-2",
+        "value": "2.5px",
+        "usage": "Message edge with 3–9 messages (TUI ━)."
+      },
+      {
+        "name": "edge-3",
+        "value": "4px",
+        "usage": "Message edge with 10+ messages (TUI ═)."
+      }
+    ]
+  },
+  "shadow": {
+    "note": "Only floating things cast shadows, and only on the web. The TUI uses a round border instead.",
+    "tokens": [
+      {
+        "name": "shadow-float",
+        "value": {
+          "dark": "0 8px 24px #000000b3",
+          "light": "0 8px 24px #1a1e2829, 0 1px 2px #1a1e281f"
+        },
+        "usage": "Command menu, pickers, dialogs, toasts."
+      },
+      {
+        "name": "ring-focus",
+        "value": {
+          "dark": "0 0 0 1px #0a0c10, 0 0 0 3px #b3c1ff",
+          "light": "0 0 0 1px #ffffff, 0 0 0 3px #3949b8"
+        },
+        "usage": "Keyboard focus ring on web controls: a 1px ground gap, then 2px starlight."
+      }
+    ]
+  },
+  "type": {
+    "fonts": [
+      {
+        "family": "JetBrains Mono",
+        "file": "fonts/JetBrainsMono-Regular.woff2",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "family": "JetBrains Mono",
+        "file": "fonts/JetBrainsMono-Bold.woff2",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "family": "JetBrains Mono",
+        "file": "fonts/JetBrainsMono-Italic.woff2",
+        "weight": "400",
+        "style": "italic"
+      }
+    ],
+    "families": {
+      "mono": "\"JetBrains Mono\", \"Cascadia Mono\", \"SF Mono\", Menlo, \"DejaVu Sans Mono\", ui-monospace, \"Symbols Nerd Font Mono\", monospace"
+    },
+    "groups": [
+      {
+        "name": "Cell styles",
+        "family": "mono",
+        "note": "One family, one size. Hierarchy comes from the five attributes the terminal also has: bold, dim, italic, underline, reverse.",
+        "styles": [
+          {
+            "name": "text-body",
+            "fontSize": "13px",
+            "lineHeight": "20px",
+            "fontWeight": 400,
+            "sample": "● rate-limits  working  » auto  @main  4s",
+            "usage": "Everything by default: conversation, rows, nodes. TUI: plain."
+          },
+          {
+            "name": "text-bold",
+            "fontSize": "13px",
+            "lineHeight": "20px",
+            "fontWeight": 700,
+            "sample": "auth-refactor",
+            "usage": "Session names, focused titles, chosen values, keys in hints. TUI: bold."
+          },
+          {
+            "name": "text-dim",
+            "fontSize": "13px",
+            "lineHeight": "20px",
+            "fontWeight": 400,
+            "sample": "api-server @feat/auth 12s",
+            "usage": "Metadata, tool output, timestamps; pair with fg-muted. TUI: dim."
+          },
+          {
+            "name": "text-italic",
+            "fontSize": "13px",
+            "lineHeight": "20px",
+            "fontWeight": 400,
+            "fontStyle": "italic",
+            "sample": "Summary: refactoring token refresh, 3 of 5 files done",
+            "usage": "Model-written text (summaries) and placeholders. TUI: italic, never the only signal."
+          },
+          {
+            "name": "text-link",
+            "fontSize": "13px",
+            "lineHeight": "20px",
+            "fontWeight": 400,
+            "sample": "src/auth/session.ts:42",
+            "usage": "Jumpable references (files, sessions, message ids); add text-decoration underline. TUI: underline."
+          }
+        ]
+      },
+      {
+        "name": "Web density",
+        "family": "mono",
+        "note": "Web-only sizes for chrome that is one line tall in the TUI.",
+        "styles": [
+          {
+            "name": "text-chrome",
+            "fontSize": "12px",
+            "lineHeight": "20px",
+            "fontWeight": 400,
+            "sample": "1 auth  2 rate-limits  3 api-docs",
+            "usage": "Status bar, status lines, chips, key hints."
+          },
+          {
+            "name": "text-label",
+            "fontSize": "11px",
+            "lineHeight": "16px",
+            "fontWeight": 700,
+            "letterSpacing": "0.06em",
+            "sample": "MAP · 15 SESSIONS",
+            "usage": "Uppercase section labels (TUI: bold dim uppercase)."
+          },
+          {
+            "name": "text-display",
+            "fontSize": "24px",
+            "lineHeight": "28px",
+            "fontWeight": 700,
+            "letterSpacing": "-0.01em",
+            "sample": "constellation",
+            "usage": "Wordmark and empty states only."
+          }
+        ]
+      }
+    ]
+  },
+  "keys": {
+    "prefix": {
+      "key": "ctrl+space",
+      "display": "C-Space",
+      "alt": "C-a when Constellation runs inside tmux with C-Space taken; set keys.prefix"
+    },
+    "bindings": [
+      {
+        "context": "prefix",
+        "key": "a",
+        "action": "jump_attention",
+        "label": "jump to the next session that needs you"
+      },
+      {
+        "context": "prefix",
+        "key": "A",
+        "action": "list_attention",
+        "label": "list everything waiting, oldest first"
+      },
+      {
+        "context": "prefix",
+        "key": "c",
+        "action": "launch",
+        "label": "start a session (launcher)"
+      },
+      {
+        "context": "prefix",
+        "key": ",",
+        "action": "rename",
+        "label": "rename the focused session"
+      },
+      {
+        "context": "prefix",
+        "key": "&",
+        "action": "stop",
+        "label": "stop the focused session (asks first)"
+      },
+      {
+        "context": "prefix",
+        "key": "x",
+        "action": "close_pane",
+        "label": "close the pane (the session keeps running)"
+      },
+      {
+        "context": "prefix",
+        "key": "%",
+        "action": "split_right",
+        "label": "split: new pane to the right"
+      },
+      {
+        "context": "prefix",
+        "key": "\"",
+        "action": "split_down",
+        "label": "split: new pane below"
+      },
+      {
+        "context": "prefix",
+        "key": "z",
+        "action": "zoom",
+        "label": "zoom / unzoom the pane"
+      },
+      {
+        "context": "prefix",
+        "key": "h j k l / arrows",
+        "action": "focus_dir",
+        "label": "move to the pane in that direction"
+      },
+      {
+        "context": "prefix",
+        "key": "o",
+        "action": "focus_next",
+        "label": "next pane"
+      },
+      {
+        "context": "prefix",
+        "key": "0-9",
+        "action": "select_window",
+        "label": "go to window n (0 is the map)"
+      },
+      {
+        "context": "prefix",
+        "key": "n p",
+        "action": "window_next_prev",
+        "label": "next / previous window"
+      },
+      {
+        "context": "prefix",
+        "key": "'",
+        "action": "goto_session",
+        "label": "go to session by number or name"
+      },
+      {
+        "context": "prefix",
+        "key": "g",
+        "action": "toggle_map",
+        "label": "show / hide the map"
+      },
+      {
+        "context": "prefix",
+        "key": "t",
+        "action": "toggle_tree",
+        "label": "show / hide the message tree"
+      },
+      {
+        "context": "prefix",
+        "key": "b",
+        "action": "broadcast",
+        "label": "send one prompt to several sessions"
+      },
+      {
+        "context": "prefix",
+        "key": "r",
+        "action": "resume",
+        "label": "resume picker (/resume)"
+      },
+      {
+        "context": "prefix",
+        "key": "f",
+        "action": "find",
+        "label": "find in every conversation"
+      },
+      {
+        "context": "prefix",
+        "key": "[",
+        "action": "scroll_mode",
+        "label": "scroll mode in the pane (vi keys, / to search)"
+      },
+      {
+        "context": "prefix",
+        "key": ":",
+        "action": "command_prompt",
+        "label": "command prompt"
+      },
+      {
+        "context": "prefix",
+        "key": "?",
+        "action": "help_keys",
+        "label": "list every binding"
+      },
+      {
+        "context": "prefix",
+        "key": "d",
+        "action": "detach",
+        "label": "detach this client (sessions keep running)"
+      },
+      {
+        "context": "prefix",
+        "key": "C-Space",
+        "action": "send_prefix",
+        "label": "send the prefix key itself"
+      },
+      {
+        "context": "pane",
+        "key": "enter",
+        "action": "send",
+        "label": "send prompt"
+      },
+      {
+        "context": "pane",
+        "key": "alt+enter / ctrl+j",
+        "action": "newline",
+        "label": "new line in the prompt"
+      },
+      {
+        "context": "pane",
+        "key": "/",
+        "action": "command_menu",
+        "label": "command menu (at the start of the prompt)"
+      },
+      {
+        "context": "pane",
+        "key": "@",
+        "action": "mention",
+        "label": "mention a file"
+      },
+      {
+        "context": "pane",
+        "key": "escape",
+        "action": "interrupt",
+        "label": "interrupt the running turn"
+      },
+      {
+        "context": "pane",
+        "key": "escape escape",
+        "action": "rewind",
+        "label": "rewind picker"
+      },
+      {
+        "context": "pane",
+        "key": "shift+tab",
+        "action": "cycle_mode",
+        "label": "cycle mode: default → edits → plan (→ bypass → auto when enabled)"
+      },
+      {
+        "context": "pane",
+        "key": "ctrl+v",
+        "action": "paste_image",
+        "label": "paste an image"
+      },
+      {
+        "context": "pane",
+        "key": "ctrl+r",
+        "action": "history",
+        "label": "search prompt history"
+      },
+      {
+        "context": "question",
+        "key": "1-4",
+        "action": "choose",
+        "label": "pick option n (toggle in multi-choice)"
+      },
+      {
+        "context": "question",
+        "key": "space",
+        "action": "toggle",
+        "label": "toggle the highlighted option"
+      },
+      {
+        "context": "question",
+        "key": "o",
+        "action": "other",
+        "label": "Other: type your own answer"
+      },
+      {
+        "context": "question",
+        "key": "tab / shift+tab",
+        "action": "next_question",
+        "label": "next / previous question"
+      },
+      {
+        "context": "question",
+        "key": "enter",
+        "action": "submit",
+        "label": "submit all answers"
+      },
+      {
+        "context": "question",
+        "key": "escape",
+        "action": "later",
+        "label": "later (the session keeps waiting)"
+      },
+      {
+        "context": "permission",
+        "key": "y",
+        "action": "allow",
+        "label": "allow once"
+      },
+      {
+        "context": "permission",
+        "key": "a",
+        "action": "allow_remember",
+        "label": "allow and remember"
+      },
+      {
+        "context": "permission",
+        "key": "e",
+        "action": "allow_edit",
+        "label": "allow with changes"
+      },
+      {
+        "context": "permission",
+        "key": "n",
+        "action": "deny",
+        "label": "deny (optionally say why)"
+      },
+      {
+        "context": "map",
+        "key": "h j k l / arrows",
+        "action": "move",
+        "label": "move between nodes"
+      },
+      {
+        "context": "map",
+        "key": "enter",
+        "action": "open",
+        "label": "open the session in a pane"
+      },
+      {
+        "context": "map",
+        "key": "space",
+        "action": "select",
+        "label": "add to selection (for broadcast)"
+      },
+      {
+        "context": "map",
+        "key": "e",
+        "action": "edges",
+        "label": "cycle through this node's links"
+      },
+      {
+        "context": "map",
+        "key": "s",
+        "action": "summarize",
+        "label": "ask for a one-line summary"
+      },
+      {
+        "context": "tree",
+        "key": "enter / o",
+        "action": "open",
+        "label": "open / jump to that point in the conversation"
+      },
+      {
+        "context": "tree",
+        "key": "O / X",
+        "action": "expand_collapse_all",
+        "label": "expand all / collapse all below"
+      },
+      {
+        "context": "tree",
+        "key": "p / P",
+        "action": "parent_root",
+        "label": "go to parent / root"
+      },
+      {
+        "context": "tree",
+        "key": "f",
+        "action": "filter",
+        "label": "filter by type"
+      },
+      {
+        "context": "tree",
+        "key": "/",
+        "action": "search",
+        "label": "search rows"
+      }
+    ]
+  }
+}

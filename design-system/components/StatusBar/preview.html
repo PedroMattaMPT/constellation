@@ -1,0 +1,36 @@
+<!-- @dsCard group="Panes" height=330 width=1180 subtitle="Every session on one line, like tmux windows" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>StatusBar — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { StatusBar, TuiFrame } = window.Constellation;
+const sessions = [
+  { n: 1, name: "auth-refactor", status: "waiting" },
+  { n: 2, name: "migrations", status: "waiting" },
+  { n: 3, name: "rate-limits", status: "working", current: true, zoomed: true },
+  { n: 4, name: "api-docs", status: "idle" },
+  { n: 5, name: "flaky-tests", status: "error" },
+  { n: 6, name: "checkout-ui", status: "working" },
+  { n: 7, name: "design-tokens", status: "idle" },
+  { n: 8, name: "old-spike", status: "stale" },
+  { n: 9, name: "storybook", status: "working" },
+  { n: 10, name: "train-eval", status: "working" },
+  { n: 11, name: "data-clean", status: "idle" },
+  { n: 12, name: "notebook-port", status: "stale" },
+  { n: 13, name: "nvim-config", status: "idle" },
+  { n: 14, name: "weekly-notes", status: "working" },
+  { n: 15, name: "inbox-triage", status: "waiting" }
+];
+const windows = [{ n: 0, name: "map" }, { n: 1, name: "work", active: true }, { n: 2, name: "ml" }];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "15 sessions · three need you · names shrink, waiting ones never do"), /* @__PURE__ */ React.createElement(StatusBar, { windows, sessions, cost: "$9.86 today", clock: "20:14", warnings: 2, maxName: 6, limit: 7 }), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "prefix pressed (C-Space): the bar says so until the next key"), /* @__PURE__ */ React.createElement(StatusBar, { windows, sessions, limit: 5, prefix: true, cost: "$9.86 today", clock: "20:14", warnings: 2, maxName: 8 }), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "calm: nothing waiting, nothing stale"), /* @__PURE__ */ React.createElement(StatusBar, { windows: [{ n: 0, name: "map", active: true }], sessions: [{ n: 1, name: "weekly-notes", status: "working", current: true }, { n: 2, name: "nvim-config", status: "idle" }, { n: 3, name: "checkout-ui", status: "working" }], cost: "$0.41 today", clock: "09:02" }), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal (1 line, 160 cells)"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 150, lines: [
+    "[chip:fill-brand] 0 map [/] [b]1 work[/][d] 2 ml [/] [chip:status-waiting-fill] 1? auth-refactor [/] [chip:status-waiting-fill] 2? migrations [/] [r]3[/][status-working]●[/][b]rate[/] [d]4[/][status-idle]○[/]api [d]5[/][status-error]×[/]fla [d]6[/][status-working]●[/]che [d]7[/][status-idle]○[/]des [d]8[/][status-stale]◌[/]old [d]+7[/]   [chip:status-waiting-fill] ? 3 [/] [status-stale]◌ 2[/]  [res-warning]△ 2[/][d]  $9.86 today  20:14[/]",
+    "[chip:fill-brand] C-Space [/] [d]waiting for a key ·[/] [focus b]a[/] [d]attention[/]  [focus b]c[/] [d]new[/]  [focus b]%[/] [d]split[/]  [focus b]z[/] [d]zoom[/]  [focus b]?[/] [d]all keys[/]"
+  ] }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

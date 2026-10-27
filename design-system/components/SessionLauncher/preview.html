@@ -1,0 +1,40 @@
+<!-- @dsCard group="Sessions" height=1070 width=1180 subtitle="Start (prefix c), stop (prefix &), rename (prefix ,)" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>SessionLauncher — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { SessionLauncher, ConfirmStop, TuiFrame, tui } = window.Constellation;
+const models = ["opus-5.5", "sonnet-5.5", "haiku-5.5"];
+const recent = ["~/code/api-server", "~/code/web-app", "~/code/ml-pipeline", "~/bigpicture"];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "launcher · folder focused"), /* @__PURE__ */ React.createElement(SessionLauncher, { folder: "~/code/api-server", recent, name: "api-server-3", models, model: "opus-5.5", mode: "acceptEdits", focus: "folder", prompt: "Add request ids to every log line" })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "launcher · bypass chosen: type the folder name to enable Start"), /* @__PURE__ */ React.createElement(SessionLauncher, { folder: "~/code/ml-pipeline", name: "lr-sweep", models, model: "opus-5.5", mode: "bypassPermissions", focus: "mode", bypassConfirm: "ml-pip" }))), /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "stop · names what is lost"), /* @__PURE__ */ React.createElement(ConfirmStop, { name: "auth-refactor", waiting: 1, subagents: 1 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 58, lines: [
+    ...tui.box({
+      width: 58,
+      title: "[b]new session[/] [d]managed ◆[/]",
+      footer: "[focus b]tab[/] [d]next[/]  [focus b]esc[/] [d]cancel[/]  [chip:fill-brand] Start ⏎ [/]",
+      lines: [
+        "[focus b]folder[/]  [focus]▕[/]~/code/api-server[r] [/]" + " ".repeat(10) + "[focus]▏[/]",
+        "        [d]~/code/web-app  ~/code/ml-pipeline[/]",
+        "[d]name[/]    api-server-3",
+        "[d]model[/]   [focus b](●)[/] opus-5.5 [d]( )[/] sonnet-5.5 [d]( )[/] haiku",
+        "[d]mode[/]    [d]·[/] [mode-plan]‖[/] [mode-edits b on:selection]± edits[/] [chip:mode-auto]»[/] [chip:mode-bypass]![/] [mode-dontask]∅[/]",
+        "        [d]edits files without asking[/]"
+      ]
+    }),
+    "",
+    ...tui.box({
+      width: 58,
+      border: "status-error",
+      title: "[status-error]■[/] [b]stop auth-refactor?[/]",
+      footer: "[d]esc cancel[/]  [chip:mode-bypass] Stop & [/]",
+      footerAlign: "right",
+      lines: ["The process ends. Its transcript stays: /resume.", "[status-waiting b]? waiting on 1 question; it goes unanswered[/]"]
+    })
+  ] }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

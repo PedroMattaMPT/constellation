@@ -1,0 +1,25 @@
+{
+  "pid": 3150388,
+  "sessionId": "63574ae0-4e20-401a-a3af-b3d4cef4d5ec",
+  "cwd": "/home/pedro/github/Constellation/research/lab/b",
+  "startedAt": 1793052204128,
+  "procStart": "10291127",
+  "version": "2.1.311",
+  "peerProtocol": 1,
+  "peerFeatures": [
+    "notify_idle",
+    "reply_across_default_dirs",
+    "artifact_yield"
+  ],
+  "kind": "interactive",
+  "entrypoint": "cli",
+  "pidDomain": "linux:c9f694916b804379b2f48ea0d3b3146a:pid:[4026531836]",
+  "tmux": "cst-lab:@27.%51",
+  "messagingSocketPath": "/run/user/1000/cc-socks/3150388.sock",
+  "name": "lab-b",
+  "nameSource": "user",
+  "nameSince": 1793052204187,
+  "updatedAt": 1793052204325,
+  "status": "idle",
+  "statusUpdatedAt": 1793052204325
+}

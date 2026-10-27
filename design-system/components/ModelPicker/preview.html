@@ -1,0 +1,40 @@
+<!-- @dsCard group="Commands" height=660 width=1180 subtitle="Pickers: /model with effort, and /resume with a preview" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>ModelPicker — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { ModelPicker, ResumePicker, TuiFrame, tui } = window.Constellation;
+const models = [
+  { id: "default", name: "Default", note: "recommended for your plan", context: "" },
+  { id: "opus", name: "Opus 5.5", note: "hardest work, slowest", context: "200k", current: true },
+  { id: "sonnet", name: "Sonnet 5.5", note: "everyday coding", context: "200k" },
+  { id: "haiku", name: "Haiku 5.5", note: "fast, cheap subtasks", context: "200k" }
+];
+const past = [
+  { id: "7f3c9a1e-…", name: "auth-spike", project: "api-server", when: "yesterday", turns: 18, tag: "keep", preview: ["› Try JWT rotation without a DB table", "¶ Rotation works; refresh tokens live 14d…", "› Write it up in AUTH.md", "¶ Done. AUTH.md covers rotation, revocation…"] },
+  { id: "b21e04d0-…", name: "perf-budget", project: "web-app", when: "2d", turns: 7, preview: ["› Set a 170kb JS budget", "¶ Budget added to CI…"] },
+  { id: "c9d8a7f1-…", name: "lr-sweep-v1", project: "ml-pipeline", when: "5d", turns: 31, preview: ["› Sweep lr 1e-4…1e-3"] },
+  { id: "0a1b2c3d-…", name: "nvim-lsp", project: "dotfiles", when: "1w", turns: 4, preview: ["› Move lsp to lazy.nvim"] }
+];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { width: "74ch" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "/model · current is (●), highlight is the bar"), /* @__PURE__ */ React.createElement(ModelPicker, { models, highlighted: 2, effort: "high" }), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "effort row focused (← →)"), /* @__PURE__ */ React.createElement(ModelPicker, { models: models.slice(1), highlighted: 0, effort: "medium", focusEffort: true })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 56, lines: tui.box({
+    width: 56,
+    title: "[b]model[/] [d]applies to the next turn[/]",
+    pad: 0,
+    footer: "[focus b]1-4[/] [d]pick[/]  [focus b]←→[/] [d]effort[/]  [focus b]enter[/] [d]apply[/]",
+    lines: [
+      "  [d]( )[/] 1 Default      [d]recommended for your plan[/]",
+      "  [focus b](●)[/] 2 Opus 5.5     [d]hardest work, slowest[/]",
+      "[focus]▌[/][on:selection] [/][d on:selection]( ) [/][fg-strong b on:selection]3 Sonnet 5.5   [/][fg on:selection]everyday coding         [/]",
+      "  [d]( )[/] 4 Haiku 5.5    [d]fast, cheap subtasks[/]",
+      "[line]" + "─".repeat(54) + "[/]",
+      "  [d]effort[/]  [d]low  medium[/] [fg-strong b u on:selection] high [/] [d]max[/]"
+    ]
+  }) }))), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "/resume · past sessions (stopped ■) with the last turns of the highlighted one"), /* @__PURE__ */ React.createElement(ResumePicker, { sessions: past, highlighted: 0, query: "" }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

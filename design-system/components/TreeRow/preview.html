@@ -1,0 +1,48 @@
+<!-- @dsCard group="Tree" height=420 width=1180 subtitle="NERDTree-style message tree: project › session › prompt › events" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>TreeRow — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { TreeRow, TreeFilter, TuiFrame } = window.Constellation;
+const chips = [
+  { type: "prompt", count: 24, on: true },
+  { type: "slash", count: 6, on: true },
+  { type: "tool", count: 412, on: true },
+  { type: "question", count: 3, on: true },
+  { type: "peer", count: 9, on: true },
+  { type: "subagent", count: 4, on: true },
+  { type: "reply", count: 24, on: true }
+];
+const peerOnly = chips.map((c) => ({ ...c, on: c.type === "peer" }));
+function Full() {
+  return /* @__PURE__ */ React.createElement("div", { className: "cn-tree", role: "tree", style: { width: "46ch" } }, /* @__PURE__ */ React.createElement(TreeFilter, { chips }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "project", label: "api-server", meta: "5", depth: 0, hasChildren: true, expanded: true }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "session", label: "auth-refactor", status: "waiting", depth: 1, hasChildren: true, expanded: true, meta: "12s" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "prompt", turn: 1, label: "Split the auth middleware into…", depth: 2, guides: [true], hasChildren: true, meta: "14m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "prompt", turn: 2, label: "Go ahead, keep the public API", depth: 2, guides: [true], last: true, hasChildren: true, expanded: true, meta: "3m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "slash", label: "compact", depth: 3, guides: [true, false], meta: "182k→41k" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "tool", label: "Edit session.ts", depth: 3, guides: [true, false], meta: "+48 −12" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "sent", label: "migrations · tokens table?", depth: 3, guides: [true, false], meta: "2m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "received", label: "migrations · 0042 drafted", depth: 3, guides: [true, false], meta: "1m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "subagent_started", label: "explore · find callers", depth: 3, guides: [true, false] }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "subagent_reported", label: "explore · 14 callers", depth: 3, guides: [true, false], meta: "40s" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "reply", label: "The token layer is in place…", depth: 3, guides: [true, false] }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "question", label: "Which session store?", depth: 3, guides: [true, false], last: true, attention: true, cursor: true, meta: "12s" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "session", label: "migrations", status: "waiting", depth: 1, hasChildren: true, meta: "1m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "session", label: "rate-limits", status: "working", depth: 1, hasChildren: true, meta: "4s" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "session", label: "api-docs", sessionKind: "external", status: "idle", depth: 1, hasChildren: true, last: true, meta: "8m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "project", label: "web-app", meta: "4", depth: 0, hasChildren: true }));
+}
+function Filtered() {
+  return /* @__PURE__ */ React.createElement("div", { className: "cn-tree", role: "tree", style: { width: "46ch" } }, /* @__PURE__ */ React.createElement(TreeFilter, { chips: peerOnly }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "project", label: "api-server", meta: "5", depth: 0, hasChildren: true, expanded: true }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "session", label: "auth-refactor", status: "waiting", depth: 1, hasChildren: true, expanded: true }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "prompt", turn: 2, label: "Go ahead, keep the public API", depth: 2, guides: [true], last: true, hasChildren: true, expanded: true, dimmed: true }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "sent", label: "migrations · tokens table?", depth: 3, guides: [true, false], match: true, meta: "2m", cursor: true }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "received", label: "migrations · 0042 drafted", depth: 3, guides: [true, false], last: true, match: true, meta: "1m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "session", label: "migrations", status: "waiting", depth: 1, hasChildren: true, expanded: true, last: true }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "prompt", turn: 1, label: "Write the token-table migration", depth: 2, guides: [false], last: true, hasChildren: true, expanded: true, dimmed: true }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "received", label: "auth-refactor · tokens table?", depth: 3, guides: [false, false], match: true, meta: "2m" }), /* @__PURE__ */ React.createElement(TreeRow, { kind: "sent", label: "auth-refactor · 0042 drafted", depth: 3, guides: [false, false], last: true, match: true, meta: "1m" }));
+}
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "all types · cursor on an open question"), /* @__PURE__ */ React.createElement(Full, null)), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "filter: peer messages · search /migr"), /* @__PURE__ */ React.createElement(Filtered, null)), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal (Textual Tree, 34 cells)"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 34, lines: [
+    "[d b]TREE[/] [b]›[/][d]24[/] [msg-slash]/[/][d]6[/] [msg-tool]λ[/][d]412[/] [msg-question]?[/][d]3[/] [msg-sent]→←[/][d]9[/]",
+    "[d]▾[/] [d]⌂[/] [b]api-server[/] [d]5[/]",
+    "[fg-faint]├[/] [d]▾[/] [kind-managed]◆[/] [b]auth-refactor[/] [chip:status-waiting-fill] ? [/]",
+    "[fg-faint]│ ├[/] [d]▸[/] [msg-prompt b]› 1[/] Split the auth mi…",
+    "[fg-faint]│ └[/] [d]▾[/] [msg-prompt b]› 2[/] Go ahead, keep th…",
+    "[fg-faint]│   ├[/] [msg-slash b]/compact[/] [d]182k→41k[/]",
+    "[fg-faint]│   ├[/] [msg-tool]λ Edit[/] [d]session.ts[/]",
+    "[fg-faint]│   ├[/] [msg-sent]→ migrations[/] [d]tokens…[/]",
+    "[fg-faint]│   ├[/] [msg-received]← migrations[/] [d]0042…[/]",
+    "[fg-faint]│   ├[/] [msg-subagent]◦ explore[/] [d]callers[/]",
+    "[fg-faint]│   ├[/] [msg-subagent]↑ explore[/] [d]14 found[/]",
+    "[fg-faint]│   ├[/] [msg-reply]¶[/] [d]The token layer…[/]",
+    "[on:selection][fg-faint on:selection]│   └[/][on:selection] [/][msg-question b on:selection]? Which session store? [/]",
+    "[fg-faint]├[/] [d]▸[/] [kind-managed]◆[/] [b]migrations[/] [chip:status-waiting-fill] ? [/]",
+    "[fg-faint]├[/] [d]▸[/] [kind-managed]◆[/] [b]rate-limits[/] [status-working]●[/]",
+    "[fg-faint]└[/] [d]▸[/] [kind-external]◇[/] [kind-external i]api-docs[/] [status-idle]○[/]"
+  ] }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

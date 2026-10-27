@@ -1,0 +1,24 @@
+<!-- @dsCard group="Resources" height=280 width=1180 subtitle="Context-window fill; the /context breakdown" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>ContextBar — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { ContextBar, TuiFrame } = window.Constellation;
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row", style: { gap: 48 } }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "normal"), /* @__PURE__ */ React.createElement(ContextBar, { value: 42 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "warning ≥ 80 %"), /* @__PURE__ */ React.createElement(ContextBar, { value: 83 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "critical ≥ 95 %"), /* @__PURE__ */ React.createElement(ContextBar, { value: 97 })), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "wide (status line, 16 cells)"), /* @__PURE__ */ React.createElement(ContextBar, { value: 64, cells: 16 }))), /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { maxWidth: "96ch" } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "/context: breakdown from get_context_usage(), tick at the auto-compact threshold"), /* @__PURE__ */ React.createElement(ContextBar, { value: 0, max: 2e5, compactAt: 0.8, slices: [
+    { label: "system", tokens: 3100, tone: "system" },
+    { label: "tools", tokens: 12400, tone: "tools" },
+    { label: "mcp", tokens: 6800, tone: "mcp" },
+    { label: "memory files", tokens: 4200, tone: "memory" },
+    { label: "messages", tokens: 139500, tone: "messages" }
+  ] })), /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal: 8 cells, partial blocks · ASCII"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 80, lines: [
+    "[d]ctx[/] [res-normal]███▍[/][res-track]····[/] [d]42%[/]        [d]ctx[/] [res-warning]██████▋[/][res-track]·[/] [res-warning]83% △[/]        [d]ctx[/] [res-critical]███████▊[/] [res-critical b]97% ▲[/]",
+    "[d]ctx \\[####----] 42%       ctx \\[#######-] 83% ^       ctx \\[########] 97% ![/]"
+  ] }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+{"msgV":1,"msg_id":"aa6932a2-af41-46bd-8bb9-0a9745d71b65","type":"user","message":{"role":"user","content":"<cross-session-message from=\"uds:/run/user/1000/cc-socks/3112238.sock\" from-name=\"lab-a\" from-mode=\"prompting\">\nprobe-123\n</cross-session-message>"},"priority":"next","from":"uds:/run/user/1000/cc-socks/3112238.sock"}

@@ -1,0 +1,19 @@
+<!-- @dsCard group="Atoms" height=190 width=1180 subtitle="Six permission modes, colored by risk; bypass is a hazard" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>ModeBadge — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { ModeBadge, KindMark, TuiFrame } = window.Constellation;
+const modes = ["plan", "dontAsk", "default", "acceptEdits", "auto", "bypassPermissions"];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "safest → riskiest · text for restricted and asking, filled for modes that run commands without you"), /* @__PURE__ */ React.createElement("div", { className: "pv-row", style: { gap: "3ch", alignItems: "center" } }, modes.map((m) => /* @__PURE__ */ React.createElement(ModeBadge, { key: m, mode: m }))), /* @__PURE__ */ React.createElement("div", { className: "pv-row", style: { gap: "3ch", alignItems: "center" } }, /* @__PURE__ */ React.createElement("span", { className: "cn-dim" }, "compact"), modes.map((m) => /* @__PURE__ */ React.createElement(ModeBadge, { key: m, mode: m, compact: true })), /* @__PURE__ */ React.createElement("span", { className: "cn-dim", style: { marginLeft: "4ch" } }, "kind"), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement(KindMark, { kind: "managed" }), " managed"), /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement(KindMark, { kind: "external" }), " ", /* @__PURE__ */ React.createElement("span", { className: "cn-kind--external" }, "external"), " ", /* @__PURE__ */ React.createElement("span", { className: "cn-tag" }, "ext"))), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 92, lines: [
+    "[mode-plan]‖ plan[/]  [mode-dontask]∅ no-ask[/]  [mode-default]· default[/]  [mode-edits]± edits[/]  [chip:mode-auto] » auto [/]  [chip:mode-bypass] ! BYPASS [/]   [kind-managed]◆[/] managed  [kind-external]◇ ext[/]",
+    "[d]16 colors:[/] [mode-plan]‖ plan[/]  [mode-dontask]∅ no-ask[/]  · default  [mode-edits]± edits[/]  [r mode-edits] » auto [/]  [r status-error b] ! BYPASS [/]"
+  ] }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

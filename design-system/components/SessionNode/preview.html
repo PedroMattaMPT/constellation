@@ -1,0 +1,118 @@
+<!-- @dsCard group="Map" height=540 width=1180 subtitle="One running session on the map: web node and its TUI row" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>SessionNode — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { SessionNode, TuiFrame, tui } = window.Constellation;
+const R = (cur, proj, kind, name, status, mode, branch, ago, alert, lane) => tui.cols([[cur, 1], [proj, 13], [kind, 2], [name, 15], [status, 13], [mode, 11], [branch, 17], [ago, 4], [alert, 6], [lane, 6]]);
+const W = "[chip:status-waiting-fill] ? needs you [/]";
+const cpu = [12, 14, 20, 35, 30, 42, 60, 55, 48, 70, 90, 120, 160, 140, 110, 95, 130, 180, 210, 240, 230, 260, 300, 280, 310, 290, 320, 330, 340, 340];
+const gpu = [8, 9, 12, 14, 15, 15, 16, 17, 17, 18, 18, 19, 19, 19.5, 20, 20, 20.2, 20.4, 20.6, 20.8, 21, 21, 21.1, 21.2, 21.2, 21.3, 21.3, 21.4, 21.4, 21.4];
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "needs you · focused"), /* @__PURE__ */ React.createElement(
+    SessionNode,
+    {
+      index: 1,
+      name: "auth-refactor",
+      project: "api-server",
+      branch: "feat/auth-split",
+      mode: "acceptEdits",
+      status: "waiting",
+      ago: "12s",
+      task: "Split the auth middleware into session + token layers",
+      step: "asked: Which session store?",
+      ctx: 64,
+      focused: true,
+      subagents: [{ name: "explore", status: "reported", tools: 14 }]
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "working · warnings"), /* @__PURE__ */ React.createElement(
+    SessionNode,
+    {
+      index: 3,
+      name: "rate-limits",
+      project: "api-server",
+      branch: "main",
+      mode: "auto",
+      status: "working",
+      ago: "4s",
+      task: "Add per-route rate limits",
+      step: "Edit src/limits/route.ts",
+      ctx: 83,
+      cpu,
+      subagents: [{ name: "explore", status: "working", tools: 6 }]
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "external · summary asked for"), /* @__PURE__ */ React.createElement(
+    SessionNode,
+    {
+      index: 4,
+      kind: "external",
+      name: "api-docs",
+      project: "api-server",
+      branch: "docs/v2",
+      mode: "default",
+      status: "idle",
+      ago: "8m",
+      task: "Regenerate the OpenAPI docs",
+      step: "wrote docs/openapi.yaml",
+      summary: "Docs regenerated; waiting for review of 2 renamed routes."
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "stale (forgotten)"), /* @__PURE__ */ React.createElement(
+    SessionNode,
+    {
+      index: 8,
+      name: "old-spike",
+      project: "web-app",
+      branch: "spike/ssr",
+      mode: "default",
+      status: "stale",
+      ago: "3h",
+      task: "Try streaming SSR",
+      step: "replied: SSR works behind a flag",
+      ctx: 71
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "error"), /* @__PURE__ */ React.createElement(
+    SessionNode,
+    {
+      index: 5,
+      name: "flaky-tests",
+      project: "api-server",
+      branch: "main",
+      mode: "default",
+      status: "error",
+      ago: "3m",
+      task: "Find the flaky auth test",
+      step: "pytest exited 2",
+      ctx: 48
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "bypass permissions · GPU over limit"), /* @__PURE__ */ React.createElement(
+    SessionNode,
+    {
+      index: 10,
+      name: "train-eval",
+      project: "ml-pipeline",
+      branch: "exp/lr-sweep",
+      mode: "bypassPermissions",
+      status: "working",
+      ago: "1s",
+      task: "Sweep learning rates 1e-4 … 3e-3",
+      step: "Bash python train.py --lr 3e-4",
+      ctx: 29,
+      alert: { level: "critical", label: "gpu 21.4/20 GB" }
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "pv-row" }, /* @__PURE__ */ React.createElement("div", { className: "pv-col" }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "selected for broadcast · compact"), /* @__PURE__ */ React.createElement(SessionNode, { compact: true, selected: true, index: 6, name: "checkout-ui", project: "web-app", branch: "feat/checkout", mode: "acceptEdits", status: "working", ago: "2s", task: "", step: "" }), /* @__PURE__ */ React.createElement(SessionNode, { compact: true, index: 7, name: "design-tokens", project: "web-app", branch: "feat/checkout", mode: "plan", status: "idle", ago: "5m", task: "", step: "" }), /* @__PURE__ */ React.createElement(SessionNode, { compact: true, index: 11, name: "data-clean", project: "ml-pipeline", branch: "main", mode: "dontAsk", status: "idle", ago: "6m", task: "", step: "" }), /* @__PURE__ */ React.createElement(SessionNode, { compact: true, disabled: true, index: 16, name: "nightly-bench", project: "ml-pipeline", branch: "main", mode: "default", status: "stopped", ago: "now", task: "", step: "" })), /* @__PURE__ */ React.createElement("div", { className: "pv-col", style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { className: "pv-cap" }, "terminal: one row per session, links as lanes"), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 96, lines: [
+    "[d b]MAP[/][d]  15 sessions  [/][chip:status-waiting-fill] ? 3 need you [/]  [status-stale]◌ 2 stale[/]  [status-error]× 1 error[/]",
+    R("[focus]▌[/]", "[d b]api-server[/]", "[kind-managed]◆[/]", "[b]auth-refactor[/]", W, "[mode-edits]± edits[/]", "[d]@feat/auth-split[/]", "[d]12s[/]", "", "[focus]◂━┓[/]"),
+    R(" ", "", "[kind-managed]◆[/]", "[b]migrations[/]", W, "[mode-default]· default[/]", "[d]@feat/auth-split[/]", "[d] 1m[/]", "", "[focus]◂━┛[/]"),
+    R(" ", "", "[kind-managed]◆[/]", "[b]rate-limits[/]", "[status-working]● working[/]", "[chip:mode-auto] » auto [/]", "[d]@main[/]", "[d] 4s[/]", "[res-warning]△ctx[/]", "[edge]─┐[/]"),
+    R(" ", "", "[kind-external]◇[/]", "[kind-external i]api-docs[/]", "[status-idle]○ idle[/]", "[mode-default]· default[/]", "[d]@docs/v2[/]", "[d] 8m[/]", "[kind-external]ext[/]", "[edge]◂─┘[/]"),
+    R(" ", "", "[kind-managed]◆[/]", "[b]flaky-tests[/]", "[status-error b]× error[/]", "[mode-default]· default[/]", "[d]@main[/]", "[d] 3m[/]", "", ""),
+    R(" ", "[d b]web-app[/]", "[kind-managed]◆[/]", "[b]old-spike[/]", "[status-stale]◌ stale 3h[/]", "[mode-default]· default[/]", "[d]@spike/ssr[/]", "[d] 3h[/]", "", ""),
+    R(" ", "[d b]ml-pipeline[/]", "[kind-managed]◆[/]", "[b]train-eval[/]", "[status-working]● working[/]", "[chip:mode-bypass] ! BYPASS [/]", "[d]@exp/lr-sweep[/]", "[d] 1s[/]", "[chip:res-critical-fill]▲gpu[/]", "")
+  ] }))));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>

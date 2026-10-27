@@ -1,0 +1,181 @@
+/* App layout. Every value is a design-system token (constellation.css); sizes count cells (1ch) and rows (20px). */
+
+html, body, #root { height: 100%; }
+body { overflow: hidden; }
+
+.app {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 24px;
+  height: 100vh;
+}
+.app__tree { grid-row: 1; grid-column: 1; min-height: 0; display: flex; flex-direction: column; background: var(--panel); }
+.app__main { grid-row: 1; grid-column: 3; display: grid; min-height: 0; min-width: 0; }
+.app__map { position: relative; min-height: 0; background: var(--surface); }
+.app__panes { display: flex; min-height: 0; }
+.app__bar { grid-row: 2; grid-column: 1 / -1; min-width: 0; }
+.app__bar .cn-bar__s, .app__bar .cn-chip--waiting { cursor: pointer; }
+
+.gutter { background: var(--line); }
+.gutter:hover, .gutter:active { background: var(--line-control); }
+.gutter--x { grid-row: 1; grid-column: 2; cursor: col-resize; }
+.gutter--y { cursor: row-resize; }
+
+/* Hide and show (web only: the TUI uses C-Space t and C-Space x). The x sits at the end of a header. */
+.side-head { flex: none; }
+.hide-btn, .show-btn { display: inline-flex; align-items: center; justify-content: center; flex: none; height: 18px; padding: 0;
+  font: inherit; font-size: 12px; color: var(--fg-muted); background: transparent; border: var(--stroke-hair) solid transparent;
+  border-radius: var(--radius-chip); cursor: pointer; }
+.hide-btn { min-width: 3ch; padding: 0 4px; }
+.hide-btn:hover, .show-btn:hover { color: var(--fg-strong); background: var(--hover); border-color: var(--line-control); }
+.hide-btn:focus-visible, .show-btn:focus-visible, .pane-bar:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.hide-hint { visibility: hidden; font-size: 12px; }
+.cn-pane__head:hover .hide-hint { visibility: visible; }
+.app__tree--hidden { align-items: center; padding-top: 3px; border-right: var(--stroke-hair) solid var(--line); }
+.show-btn { width: 2ch; height: 20px; color: var(--fg); }
+.pane-bar { width: 100%; font: inherit; color: var(--fg); text-align: left; cursor: pointer; border: 0; border-top: var(--stroke-hair) solid var(--line); }
+.pane-bar:hover { background: var(--hover); }
+.pane-bar .cn-keys__key, .pane-bar .cn-keys__label { font-size: 12px; }
+
+/* Connection state, over the top of the map */
+.banner { position: absolute; z-index: 10; top: 8px; left: 50%; transform: translateX(-50%); padding: 0 1ch; line-height: 24px;
+  background: var(--raised); border: var(--stroke-hair) solid var(--line-strong); border-radius: var(--radius-card); box-shadow: var(--shadow-float); }
+.banner--unauthorized, .banner--no-token { border-color: var(--status-error); }
+
+/* Tree */
+.tree { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.tree__rows { flex: 1; min-height: 0; outline: none; }
+.tree__rows:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+
+/* Pane and conversation */
+.pane { flex: 1; min-width: 0; }
+.conv { padding: 0; overflow: hidden; }
+.conv > div { height: 100%; }
+.conv-row { padding: 0 1ch; cursor: pointer; }
+.conv-row:hover { background: var(--hover); }
+.conv-row--thinking { opacity: 0.7; }
+.conv-row--flash, .conv-row--flash:hover { background: var(--selection); } /* on for 120 ms, no transition */
+.conv-body { margin: 2px 0 6px; }
+.conv-body pre { margin: 0 0 4px; padding: 4px 1ch; white-space: pre-wrap; word-break: break-word; font: inherit;
+  background: var(--panel); border: var(--stroke-hair) solid var(--line); max-height: 400px; overflow: auto; }
+.conv-body__input { color: var(--fg-muted); }
+.conv-empty { padding: 8px 1ch; }
+.conv-waiting { display: flex; align-items: center; gap: 1ch; padding-top: 4px; }
+
+/* Map: React Flow on the surface, in the design system's colors */
+.react-flow { background: var(--surface); font-family: var(--font-mono); }
+.react-flow__node { font: inherit; }
+.react-flow__node-project { pointer-events: none; }
+.react-flow__node-session { cursor: pointer; width: 40ch; }
+.react-flow__node-session .cn-node__subs { max-width: 40ch; overflow: hidden; }
+.react-flow__node-session .cn-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-handle { width: 1px; height: 1px; min-width: 0; min-height: 0; border: 0; background: transparent; opacity: 0; }
+.map-endpoint { padding: 0 1ch; line-height: 26px; white-space: nowrap; background: var(--raised);
+  border: var(--stroke-hair) dashed var(--kind-external); border-radius: var(--radius-card); }
+/* The minimap and the key hints float over the map: round border and the float shadow. */
+.react-flow__minimap { background: var(--panel); border: var(--stroke-hair) solid var(--line-strong); border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float); overflow: hidden; }
+.react-flow__minimap-mask { fill: var(--bg); fill-opacity: 0.6; }
+.react-flow__minimap-node { stroke: none; }
+.react-flow__attribution { background: transparent; }
+.react-flow__attribution a { color: var(--fg-faint); }
+.map-keys { display: flex; align-items: center; gap: 2ch; height: 24px; padding: 0 1ch; background: var(--panel);
+  border: var(--stroke-hair) solid var(--line-strong); border-radius: var(--radius-card); box-shadow: var(--shadow-float); }
+.map-keys button { padding: 0; font: inherit; font-size: 12px; background: none; border: 0; cursor: pointer; }
+.map-keys button:hover .cn-keys__label { color: var(--fg-strong); }
+.map-keys button:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+
+/* Star view (web only: the TUI map is a table). A faint glow of starlight behind the whole sky, and one per project. */
+.react-flow.map--stars { background: radial-gradient(ellipse 70% 55% at 65% 30%, color-mix(in srgb, var(--focus) 5%, transparent), transparent 70%), var(--surface); }
+.starfield { position: absolute; inset: 0; width: 100%; height: 100%; }
+.starfield__far { fill: var(--fg-faint); }
+.starfield__near { fill: var(--fg-muted); }
+.starfield__tint { fill: var(--focus); }
+.map--stars .cn-group { border: 0; background: radial-gradient(ellipse 60% 50% at 30% 50%, color-mix(in srgb, var(--focus) 6%, transparent), transparent 75%); }
+.react-flow__edge-figure { pointer-events: none; }
+.figure { fill: none; stroke: var(--fg-faint); stroke-width: 1; opacity: 0.5; }
+
+.react-flow__node:focus { outline: none; } /* a clicked node shows as focused through its own ring, not the browser's */
+.react-flow__node-star:focus-visible .star__label { box-shadow: var(--ring-focus); }
+.react-flow__node-star, .react-flow__node-endpointStar { cursor: pointer; }
+.react-flow__node-star:hover { z-index: 1000 !important; } /* its card opens over the stars below */
+.star { position: relative; box-sizing: border-box; width: 340px; padding-left: 36px; }
+.star--endpoint { width: auto; }
+.star__mark { position: absolute; left: -16px; top: -22px; overflow: visible; pointer-events: none; color: var(--kind-managed); }
+.star--working { color: var(--status-working); }
+.star--waiting { color: var(--status-waiting-fill); }
+.star--error { color: var(--status-error); }
+.star--stale { color: var(--status-stale); opacity: 0.75; }
+.star--stopped { color: var(--fg-faint); }
+.star--idle.star--hollow, .star--external-peer { color: var(--kind-external); }
+.star__halo { fill: currentColor; opacity: 0.14; }
+.star__body { fill: currentColor; filter: drop-shadow(0 0 3px currentColor); }
+.star__glint { fill: currentColor; opacity: 0.5; }
+.star__core { fill: var(--fg-strong); }
+/* External (◇): a paler star with an outline, so yours stay the brightest. */
+.star--hollow .star__body { fill-opacity: 0.4; stroke: currentColor; stroke-width: 1; }
+.star--hollow .star__glint { opacity: 0.3; }
+.star__ring { fill: none; stroke-width: 1.5; }
+.star__ring--hover { stroke: var(--line-control); visibility: hidden; }
+.react-flow__node-star:hover .star__ring--hover { visibility: visible; }
+.star__ring--focus { stroke: var(--focus); }
+.star__ring--waiting { stroke: var(--status-waiting-fill); stroke-width: 2; }
+.star__ring--bypass { stroke: var(--mode-bypass); stroke-dasharray: 3 2; }
+.star__moon--working { fill: var(--msg-subagent); }
+.star__moon--reported { fill: none; stroke: var(--fg-faint); stroke-width: 1; }
+/* Labels float on the sky on a faint plate of the canvas color, so lines pass under the text, not through it. */
+.star__label { display: inline-flex; flex-direction: column; max-width: 100%; min-width: 0; padding: 0 4px; margin-left: -4px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent); border-radius: var(--radius-chip); }
+.star__row { display: flex; align-items: center; gap: 1ch; height: 20px; min-width: 0; white-space: nowrap; overflow: hidden; }
+.star__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg-strong); font-weight: 700; }
+.star__index--focused { padding: 0 4px; background: var(--fill-brand); color: var(--on-fill-brand); font-weight: 700; border-radius: var(--radius-chip); }
+.star__step--idle, .star__step--stopped { color: var(--fg-muted); }
+.star__step--stale { color: var(--fg-muted); font-style: italic; }
+/* Hovering a star shows the design system's full card under its label, after a short pause. */
+.star__card { position: absolute; top: 68px; left: 36px; visibility: hidden; pointer-events: none; }
+.star__card .cn-node { box-shadow: var(--shadow-float); }
+.react-flow__node-star:hover .star__card { visibility: visible; transition: visibility 0s linear 250ms; }
+
+/* Typing into the pane (managed sessions): the design system's PromptBox with a real textarea. */
+.prompt .cn-prompt__line { align-items: flex-start; }
+.prompt .cn-prompt__marker, .prompt .cn-keys { line-height: 28px; }
+.prompt__input { flex: 1; min-width: 0; max-height: 120px; margin: 4px 0; padding: 0; resize: none; overflow-y: auto;
+  font: inherit; line-height: 20px; color: var(--fg-strong); caret-color: var(--focus); background: transparent; border: 0; outline: none; }
+.prompt__input::placeholder { color: var(--fg-faint); font-style: italic; }
+.prompt__image { cursor: pointer; background: transparent; font: inherit; font-size: 12px; }
+.prompt__image:hover { border-color: var(--line-control); }
+.queue { display: flex; flex-direction: column; }
+.queue__row { display: flex; align-items: center; gap: 1ch; height: 20px; color: var(--fg-muted); font-style: italic; }
+.queue__text { flex: 1; }
+.queue__drop { align-self: flex-start; margin: 2px 0; }
+.rename__input { width: 24ch; padding: 0; font: inherit; color: var(--fg-strong); caret-color: var(--focus); background: transparent; border: 0; outline: none; }
+
+/* Floating layer: dialogs centered over the panes, with the float shadow from the design system. */
+.app__main { position: relative; }
+.layer { position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.layer .cn-dialog { max-height: 100%; overflow-y: auto; }
+.dialog-input { width: 100%; font: inherit; caret-color: var(--focus); outline: none; }
+textarea.dialog-input { resize: vertical; padding: 2px 1ch; }
+.cn-field--focused .dialog-input { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.seg-button { font: inherit; background: transparent; cursor: pointer; }
+.seg-button:focus-visible, .tag-button:focus-visible { outline: none; box-shadow: var(--ring-focus); }
+.seg-button:disabled { color: var(--fg-faint); cursor: not-allowed; }
+.seg-button:disabled .cn-chip, .seg-button:disabled .cn-mode { opacity: 0.45; }
+.tag-button { font: inherit; font-size: 12px; background: transparent; cursor: pointer; }
+.tag-button:hover { color: var(--fg-strong); border-color: var(--line-control); }
+.stop-dialog { outline: none; } /* focused only to take & and esc; its own border marks it */
+.stop-dialog__error { padding: 4px 2ch 0; }
+
+/* Answering (managed sessions): the design system's QuestionCard and PermissionPrompt, taking keys and clicks. */
+.cn-pane__dock { max-height: 60%; overflow-y: auto; }
+.answer-card { margin: 4px 0; outline: none; }
+.answer-card:focus-visible { box-shadow: var(--ring-focus); }
+.option-row { cursor: pointer; }
+.option-row:hover:not(.cn-opt--on) { background: var(--hover); }
+.option-row--disabled { cursor: default; color: var(--fg-faint); }
+.option-row--disabled .cn-opt__key, .option-row--disabled .cn-opt__label { color: var(--fg-faint); }
+.answer-input { flex: 1; font: inherit; caret-color: var(--focus); outline: none; }
+.answer-edit { width: 100%; align-items: flex-start; margin: 4px 0; }
+.answer-edit__field { flex: 1; min-width: 0; padding: 2px 0; resize: none; font: inherit; color: var(--fg-strong); caret-color: var(--focus);
+  background: transparent; border: 0; outline: none; }
+.answer-diff { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.step-button { padding: 0; font: inherit; font-size: 12px; background: none; border: 0; cursor: pointer; }

@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Web
+node_modules/
+web/dist/
+*.tsbuildinfo
+
+# Local
+*.log
+
+# Browser checks
+.playwright-mcp/

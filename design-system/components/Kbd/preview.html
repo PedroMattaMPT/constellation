@@ -1,0 +1,29 @@
+<!-- @dsCard group="Atoms" height=460 width=1180 subtitle="How bindings are shown: chords, hints, and the overlay after the prefix" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Kbd — preview</title></head>
+<body>
+<div id="root"></div>
+<script>
+const { Kbd, KeyHints, WhichKey, TuiFrame, tui } = window.Constellation;
+function Preview() {
+  return /* @__PURE__ */ React.createElement("div", { className: "pv" }, /* @__PURE__ */ React.createElement("div", { className: "pv-row", style: { alignItems: "center", gap: "3ch" } }, /* @__PURE__ */ React.createElement("span", { className: "pv-cap" }, "chords"), /* @__PURE__ */ React.createElement(Kbd, null, "C-Space"), /* @__PURE__ */ React.createElement("span", { className: "cn-dim" }, "then"), /* @__PURE__ */ React.createElement(Kbd, null, "a"), /* @__PURE__ */ React.createElement(Kbd, null, "S-Tab"), /* @__PURE__ */ React.createElement(Kbd, null, "M-Enter"), /* @__PURE__ */ React.createElement(Kbd, null, "Esc Esc"), /* @__PURE__ */ React.createElement("span", { className: "pv-cap", style: { marginLeft: "4ch" } }, "footer hints"), /* @__PURE__ */ React.createElement(KeyHints, { keys: [["1-3", "pick"], ["o", "other"], ["tab", "next"], ["esc", "later"]] })), /* @__PURE__ */ React.createElement(WhichKey, { groups: [
+    { title: "attention", keys: [["a", "next that needs you"], ["A", "list everything waiting"], ["f", "find in all conversations"], ["r", "resume picker"]] },
+    { title: "sessions", keys: [["c", "new session"], [",", "rename"], ["&", "stop (asks)"], ["b", "send to several"], ["'", "go to session…"]] },
+    { title: "panes & windows", keys: [["%", "split right"], ['"', "split down"], ["z", "zoom"], ["x", "close pane"], ["hjkl", "move"], ["0-9", "window n"], ["g", "map"], ["t", "tree"], ["d", "detach"]] }
+  ] }), /* @__PURE__ */ React.createElement(TuiFrame, { cols: 72, lines: tui.box({
+    width: 72,
+    title: "[chip:fill-brand] C-Space [/] [d]then …  ? all keys · esc cancel[/]",
+    lines: [
+      tui.cols([["[d b]ATTENTION[/]", 23], ["[d b]SESSIONS[/]", 22], ["[d b]PANES[/]", 20]]),
+      tui.cols([["[focus b]a[/]  next needs you", 23], ["[focus b]c[/]  new", 22], ["[focus b]%[/]  split right", 20]]),
+      tui.cols([["[focus b]A[/]  list waiting", 23], ["[focus b],[/]  rename", 22], ['[focus b]"[/]  split down', 20]]),
+      tui.cols([["[focus b]f[/]  find everywhere", 23], ["[focus b]&[/]  stop (asks)", 22], ["[focus b]z[/]  zoom", 20]]),
+      tui.cols([["[focus b]r[/]  resume", 23], ["[focus b]b[/]  send to several", 22], ["[focus b]x[/]  close pane", 20]])
+    ]
+  }) }));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(Preview, null));
+</script>
+</body>
+</html>
