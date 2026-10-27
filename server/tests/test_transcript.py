@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from pathlib import Path
 
@@ -29,7 +30,7 @@ def test_lab_session_entries():
     assert tl.turn == len(starters)
 
     answer = next(i for i in tl.items if i.kind == "answer")
-    assert answer.text == "Blue"
+    assert answer.text == "Color: Blue"  # the design system's answered record: header, then the answer
     assert t.title == "lab-a" and t.permission_mode == "default"
 
 
@@ -94,3 +95,32 @@ def test_raw_api_lines_are_skipped(tmp_path: Path):
     path.write_text('{"type":"api-request","huge":"x"}\nnot json\n')
     t, tl = Transcript(path, "s"), Timeline()
     assert t.read(tl) == [] and t.offset == path.stat().st_size
+
+
+def test_a_mode_change_is_a_record_and_images_are_counted(tmp_path: Path):
+    lines = [
+        {"type": "permission-mode", "permissionMode": "default"},
+        {
+            "type": "user",
+            "uuid": "p1",
+            "message": {
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+                    {"type": "text", "text": "look"},
+                ]
+            },
+        },
+        {"type": "permission-mode", "permissionMode": "default"},
+        {"type": "permission-mode", "permissionMode": "plan"},
+        # An SDK session marks only its prompts: the mode on the prompt line counts the same, and once.
+        {"type": "user", "uuid": "p2", "permissionMode": "acceptEdits", "message": {"content": "go"}},
+        {"type": "permission-mode", "permissionMode": "acceptEdits"},
+    ]
+    path = tmp_path / "s.jsonl"
+    path.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    t, tl = Transcript(path, "s"), Timeline()
+    t.read(tl)
+    modes = [i.text for i in tl.items if i.kind in ("mode", "prompt")]
+    assert modes == ["look", "plan", "acceptEdits", "go"]  # changes only, each before the prompt it applies to
+    prompt = next(i for i in tl.items if i.kind == "prompt")
+    assert prompt.images == 1 and t.image(prompt, 0) == ("image/png", b"hi") and t.image(prompt, 1) is None

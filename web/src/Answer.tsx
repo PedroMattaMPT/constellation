@@ -4,6 +4,7 @@
 import { KeyHints, QuestionCard, glyph } from '@ds';
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { api } from './api';
+import { usePane } from './paneContext';
 import type { PendingRequest, Session } from './protocol';
 import { useStore } from './store';
 
@@ -22,7 +23,7 @@ type Answer = number[] | string | null;
 
 const MAX_DIFF_LINES = 400;
 
-function readQuestions(input: Record<string, unknown>): Question[] {
+export function readQuestions(input: Record<string, unknown>): Question[] {
   const list = Array.isArray(input.questions) ? input.questions : [];
   return list.map((raw) => {
     const q = (raw ?? {}) as Record<string, unknown>;
@@ -40,13 +41,14 @@ function readQuestions(input: Record<string, unknown>): Question[] {
  */
 function useCardFocus(attention: number) {
   const card = useRef<HTMLDivElement>(null);
+  const { focused } = usePane(); // a card in another pane waits there until you go to it
   useEffect(() => {
     const active = document.activeElement;
     const typing = (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) && active.value.trim() !== '';
-    if (!typing && attention >= 0) card.current?.focus();
+    if (!typing && attention >= 0 && focused) card.current?.focus();
   }, []);
   useEffect(() => {
-    if (attention > 0) card.current?.focus();
+    if (attention > 0 && focused) card.current?.focus();
   }, [attention]);
   return card;
 }
@@ -244,7 +246,7 @@ const text = (value: unknown) => (typeof value === 'string' ? value : JSON.strin
 const lines = (prefix: string, value: unknown) => text(value).split('\n').map((l) => `${prefix}${l}`);
 
 /** What a tool call is, in the design system's words: verb, subject, and a diff for file changes. */
-function shape(tool: string, input: Record<string, unknown>): Shape {
+export function shape(tool: string, input: Record<string, unknown>): Shape {
   switch (tool) {
     case 'Bash':
       return { verb: 'run a command', subject: text(input.command), command: true, editField: 'command' };
@@ -275,7 +277,7 @@ function shape(tool: string, input: Record<string, unknown>): Shape {
 }
 
 /** The risk lines (design system): ▲ for destructive commands, △ for writes outside the project. */
-function risks(tool: string, input: Record<string, unknown>, cwd: string): Array<{ level: 'warning' | 'critical'; text: string }> {
+export function risks(tool: string, input: Record<string, unknown>, cwd: string): Array<{ level: 'warning' | 'critical'; text: string }> {
   const found: Array<{ level: 'warning' | 'critical'; text: string }> = [];
   if (tool === 'Bash') {
     const command = text(input.command);

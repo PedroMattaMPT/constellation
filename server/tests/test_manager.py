@@ -446,3 +446,64 @@ def test_a_rewind_that_cannot_start_brings_the_session_back(tmp_path):
         await manager.close()
 
     run(go)
+
+
+def test_a_fork_shows_in_both_sessions_and_a_failed_adoption_is_told(claude, tmp_path):
+    async def go():
+        manager = Manager(client_factory=FakeClient)
+        told: list[str] = []
+        manager.notify = told.append
+        parent = await manager.start(str(tmp_path), name="lab")
+        parent.session_id = "s1"
+        manager.record_fork("parent-node", "lab", "child-node")
+        (fork,) = manager.forks
+        assert (fork.parent, fork.parent_name, fork.child) == ("parent-node", "lab", "child-node")
+
+        terminal = await asyncio.create_subprocess_exec(sys.executable, "-c", "pass")
+        await terminal.wait()  # already exited: the resume starts at once, in a folder that's gone
+        manager.adopt("t-1", "s9", str(tmp_path / "gone"), "term", terminal.pid, "never")
+        for _ in range(20):
+            await asyncio.sleep(0.05)
+            if told:
+                break
+        assert "term wasn't adopted" in told[0] and "claude --resume s9" in told[0] and not manager.adopting
+        await manager.close()
+
+    run(go)
+
+
+def test_background_tasks_are_tracked_until_they_end_and_can_be_stopped(tmp_path):
+    from claude_agent_sdk import TaskNotificationMessage, TaskStartedMessage, TaskUpdatedMessage
+
+    async def go():
+        manager = Manager(client_factory=FakeClient)
+        managed = await manager.start(str(tmp_path))
+        client = FakeClient.made[-1]
+        stopped: list[str] = []
+
+        async def stop_task(task_id):
+            stopped.append(task_id)
+
+        client.stop_task = stop_task
+        common = {"subtype": "task", "data": {}, "uuid": "u", "session_id": "s1"}
+        await client.stream.put(
+            TaskStartedMessage(**common, task_id="t1", description="npm run dev", task_type="local_bash")
+        )
+        await client.stream.put(
+            TaskStartedMessage(**common, task_id="t2", description="explore", task_type="local_agent")
+        )
+        await settle()
+        assert set(managed.tasks) == {"t1", "t2"}
+        await manager.stop_task(managed.id, "t1")
+        assert stopped == ["t1"]
+        with pytest.raises(ManagerError):
+            await manager.stop_task(managed.id, "nope")
+        await client.stream.put(TaskUpdatedMessage(**common, task_id="t1", patch={"status": "killed"}))
+        await client.stream.put(
+            TaskNotificationMessage(**common, task_id="t2", status="completed", output_file="", summary="")
+        )
+        await settle()
+        assert managed.tasks == {}
+        await manager.close()
+
+    run(go)

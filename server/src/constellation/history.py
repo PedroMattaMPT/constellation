@@ -9,9 +9,11 @@ from claude_agent_sdk import get_session_messages, list_sessions, tag_session
 
 from .claude import files
 from .claude.transcript import SKIP_PREFIX, first_line
-from .protocol import PastSession, PreviewLine, SessionPreview
+from .protocol import PastPrompt, PastSession, PreviewLine, SessionPreview
 
 PREVIEW_LINES = 8
+PROMPTS_TAIL = 8 << 20  # the end of history.jsonl is enough for C-r
+PROMPTS_MAX = 200
 WHOLE_FILE_MAX = 32 << 20  # bigger transcripts are previewed from their end only
 TAIL = 8 << 20
 
@@ -95,3 +97,32 @@ def preview(session_id: str, cwd: str | None = None) -> SessionPreview:
 
 def tag(session_id: str, value: str | None) -> None:
     tag_session(session_id, value.strip() if value and value.strip() else None)
+
+
+def prompts(cwd: str, query: str = "", claude_dir: Path = files.CLAUDE_DIR) -> list[PastPrompt]:
+    """Your prompts in that folder, newest first, once each: Claude Code's own history (C-r)."""
+    path = claude_dir / "history.jsonl"
+    try:
+        with path.open("rb") as fh:
+            fh.seek(max(0, path.stat().st_size - PROMPTS_TAIL))
+            raw = fh.read().split(b"\n")
+    except OSError:
+        return []
+    needle = query.lower().strip()
+    seen: set[str] = set()
+    found: list[PastPrompt] = []
+    for chunk in reversed(raw):
+        try:
+            entry = json.loads(chunk)
+        except ValueError:
+            continue
+        if not isinstance(entry, dict) or entry.get("project") != cwd:
+            continue
+        text = entry.get("display")
+        if not isinstance(text, str) or not text.strip() or text in seen or needle not in text.lower():
+            continue
+        seen.add(text)
+        found.append(PastPrompt(text=text, at=entry.get("timestamp") or 0))
+        if len(found) >= PROMPTS_MAX:
+            break
+    return found

@@ -210,10 +210,11 @@ textarea.dialog-input { resize: vertical; padding: 2px 1ch; }
 .picker--resume .cn-resume { max-width: 100%; }
 .dialog-input--inline { width: 20ch; min-height: 20px; }
 
-/* The status line's segments open their picker on a click (model, context, mode, mcp). */
-.statusline .cn-statusline > .cn-ctx,
-.statusline--live .cn-statusline > :not(.cn-sep, .cn-statusline__branch, .cn-statusline__cost) { cursor: pointer; }
-.statusline--live .cn-statusline > :first-child:hover, .statusline .cn-statusline > .cn-ctx:hover .cn-ctx__pct { color: var(--fg-strong); }
+/* The status line's segments open their picker on a click (model, context, mode, mcp, cost). */
+.statusline .cn-statusline > .cn-ctx, .statusline .cn-statusline > .cn-statusline__cost,
+.statusline--live .cn-statusline > :not(.cn-sep, .cn-statusline__branch) { cursor: pointer; }
+.statusline--live .cn-statusline > :first-child:hover, .statusline .cn-statusline > .cn-ctx:hover .cn-ctx__pct,
+.statusline .cn-statusline > .cn-statusline__cost:hover { color: var(--fg-strong); }
 
 /* The / menu, docked above the prompt box (design system: CommandMenu). */
 .prompt-menu { padding-top: 4px; }
@@ -257,3 +258,70 @@ textarea.dialog-input { resize: vertical; padding: 2px 1ch; }
 .dialog-list { display: flex; flex-direction: column; gap: 2px; padding-left: 2ch; color: var(--fg-muted); }
 .dialog-list b { color: var(--fg); font-weight: 400; }
 .picker--resume .cn-resume__preview > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Notices: what the server failed at on its own (adopting a session), floating over the map until dismissed. */
+.notices { position: absolute; z-index: 11; top: 40px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 4px;
+  width: 80ch; max-width: calc(100% - 32px); }
+.notice { display: flex; align-items: flex-start; gap: 1ch; padding: 2px 1ch; background: var(--raised);
+  border: var(--stroke-hair) solid var(--status-error); border-radius: var(--radius-card); box-shadow: var(--shadow-float); }
+.notice__text { flex: 1; min-width: 0; }
+.folder-matches { margin-top: 2px; border: var(--stroke-hair) solid var(--line); border-radius: var(--radius-chip); background: var(--surface); }
+.folder-matches .cn-menu__item { color: var(--fg); }
+.folder-matches__more { padding: 0 2ch; font-size: 12px; }
+.mention__path { white-space: nowrap; }
+.mention__path u, .prompt-menu .cn-menu__desc u { text-underline-offset: 2px; }
+.menu-search { flex: 1; min-width: 8ch; padding: 0; font: inherit; color: var(--fg-strong); background: transparent; border: 0; outline: none; }
+.conv-row--still { cursor: default; }
+.conv-row--still:hover { background: none; }
+
+/* An interrupt is yours, not an error (design system: `× interrupted by you` in fg-muted). */
+.conv-row--interrupt .cn-msg-glyph, .conv-row--interrupt .cn-msg__text { color: var(--fg-muted); font-weight: 400; }
+.tree-row--interrupt .cn-msg-glyph { color: var(--fg-muted); }
+.conv-images { display: inline-flex; flex-wrap: wrap; gap: 1ch; }
+.image-view { width: auto; min-width: 48ch; max-width: 100%; outline: none; }
+.image-view__body { display: flex; justify-content: center; padding: 8px 1ch; }
+.image-view__body img { display: block; max-width: min(100%, 1024px); max-height: 60vh; object-fit: contain; border: var(--stroke-hair) solid var(--line); }
+/* A pasted image's chip shows its thumbnail on hover (design system: web), floating above the prompt box. */
+.prompt__image { position: relative; }
+.prompt__thumb { position: absolute; bottom: calc(100% + 4px); left: 0; z-index: 5; display: none; max-width: 240px; max-height: 160px;
+  border: var(--stroke-hair) solid var(--line-strong); border-radius: var(--radius-card); box-shadow: var(--shadow-float); background: var(--raised); }
+.prompt__image:hover .prompt__thumb { display: block; }
+.tasks__row { font-style: normal; }
+
+/* The prefix's screens (design system: keyboard): which-key over the panes, every key, the command prompt. */
+.layer--which { pointer-events: none; align-items: flex-end; }
+.keys-overlay { max-width: 100%; outline: none; }
+.keys-overlay--all .cn-which { width: 100ch; }
+.keys-overlay--all .cn-which__key { width: 7ch; }
+.picker__n { flex: none; width: 2ch; text-align: right; color: var(--fg-muted); }
+.command-prompt { position: relative; }
+.command-prompt__menu { position: absolute; bottom: 28px; left: 1ch; z-index: 30; width: 60ch; }
+.command-prompt__line { display: flex; align-items: center; gap: 1ch; height: 24px; padding: 0 1ch; background: var(--panel);
+  border-top: var(--stroke-hair) solid var(--line); font-size: 12px; white-space: nowrap; overflow: hidden; }
+.command-prompt__input { flex: 1; min-width: 8ch; padding: 0; font: inherit; color: var(--fg-strong); background: transparent; border: 0; outline: none; }
+
+/* The usage card (design system: /usage): one line per measure. */
+.usage__row { display: flex; flex-wrap: wrap; align-items: center; gap: 0 1ch; min-height: 20px; }
+.usage__section { margin-top: 8px; }
+
+/* Panes (design system: tmux splits): the two sides of each split, with a 4 px gutter between that drags. */
+.panes, .split, .pane-slot { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.split--column { flex-direction: column; }
+.split__side { display: flex; flex: 0 0 auto; min-width: 0; min-height: 0; }
+.split__side--rest { flex: 1 1 0; }
+.split > .split__gutter { flex: none; grid-row: auto; grid-column: auto; }
+.split--row > .split__gutter { width: 4px; }
+.split--column > .split__gutter { height: 4px; }
+.find { width: 96ch; }
+.find__session { width: 16ch; }
+.broadcast { width: 92ch; max-width: 100%; overflow-x: hidden; }
+.broadcast .cn-target__name { width: 26ch; overflow: hidden; text-overflow: ellipsis; }
+.broadcast .cn-target__status { width: 3ch; }
+.broadcast .cn-prompt { margin: 0 -2ch; }
+.broadcast__targets { max-height: 50vh; overflow-y: auto; outline: none; }
+.broadcast__targets:focus-visible { box-shadow: var(--ring-focus-inset); }
+
+/* Below 1280 px the tree opens over the map from its strip (design system: the three layouts). */
+.app__tree--hidden { position: relative; }
+.app__tree--overlay { position: absolute; top: 0; bottom: 0; left: 100%; z-index: 25; width: 280px; max-width: calc(100vw - 4ch);
+  align-items: stretch; padding-top: 0; border: var(--stroke-hair) solid var(--line-strong); box-shadow: var(--shadow-float); }

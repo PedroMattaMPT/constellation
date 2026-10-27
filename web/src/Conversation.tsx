@@ -1,17 +1,20 @@
-import { KindMark, MessageRow, Spinner, StatusBadge, StatusLine, glyph } from '@ds';
-import { type MouseEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Virtuoso } from 'react-virtuoso';
+import { KeyHints, KindMark, MessageRow, ModeBadge, Spinner, StatusBadge, StatusLine, glyph } from '@ds';
+import { type MouseEvent, type ReactNode, type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { api, reason } from './api';
 import { AnswerCard } from './Answer';
 import { ago, cost, model, msgType } from './format';
 import { HeadButton, HideButton } from './Hide';
+import { closeLabel, closePane, usePane } from './paneContext';
 import { PromptInput } from './Prompt';
-import type { Entry, EntryContent, EntryPage, Session } from './protocol';
+import type { Entry, EntryContent, EntryPage, Mode, Session } from './protocol';
 import { numbered, store, useStore } from './store';
 
 const PAGE = 300;
 const FLASH_MS = 120; // design system: a jump flashes the row once, selection, 120 ms
 const FIRST_INDEX = 1_000_000; // Virtuoso's index of the first row; it counts down as older pages are prepended
+const ROW_PX = 20; // a one-line row (design system): Virtuoso's guess for rows it hasn't measured yet
+const SETTLE_MS = 1500; // a list opened at its end keeps the end in view this long while its rows are measured
 
 /** The design system's conversation shows prompts, tool calls, peer messages and replies: thinking stays out. */
 const shown = (entries: Entry[]) => entries.filter((e) => e.kind !== 'thinking');
@@ -22,9 +25,52 @@ const shown = (entries: Entry[]) => entries.filter((e) => e.kind !== 'thinking')
  */
 type Line =
   | { kind: 'entry'; entry: Entry; cleared: boolean; abandoned: boolean }
-  | { kind: 'rewound'; id: string; turns: number; open: boolean };
+  | { kind: 'rewound'; id: string; turns: number; open: boolean }
+  | ({ kind: 'record' } & InlineRecord);
 
-function lines(entries: Entry[], open: Set<string>): Line[] {
+/** An inline record that isn't in the transcript (design system: fork's record in both sessions). */
+export interface InlineRecord {
+  id: string;
+  /** Unix ms: it goes after the last entry written before it. */
+  at: number;
+  text: string;
+  detail: string;
+  /** The session it points at, while it runs. */
+  session: string | null;
+}
+
+/** A session's fork records: where it was forked from, and the forks made from it. */
+export function records(session: Session): InlineRecord[] {
+  const found: InlineRecord[] = [];
+  if (session.forkOf) {
+    const { at, name, session: from } = session.forkOf;
+    found.push({ id: `fork-of:${at}`, at, text: 'fork', detail: `from ${name}`, session: from });
+  }
+  for (const fork of session.forks) {
+    found.push({ id: `fork:${fork.at}:${fork.name}`, at: fork.at, text: 'fork', detail: `${glyph('message', 'sent')} ${fork.name}`, session: fork.session });
+  }
+  return found;
+}
+
+/**
+ * Puts each record after the last entry written before it. One that falls before the first entry of a page with
+ * older pages, or after the last of a page with newer ones, waits for that page.
+ */
+export function withRecords(drawn: Line[], found: InlineRecord[], hasBefore: boolean, hasAfter: boolean): Line[] {
+  if (!found.length) return drawn;
+  const out = [...drawn];
+  for (const record of [...found].sort((a, b) => a.at - b.at)) {
+    let after = -1;
+    out.forEach((line, i) => {
+      if (line.kind === 'entry' && line.entry.at && Date.parse(line.entry.at) <= record.at) after = i;
+    });
+    if ((after < 0 && hasBefore) || (after === out.length - 1 && hasAfter)) continue;
+    out.splice(after + 1, 0, { kind: 'record', ...record });
+  }
+  return out;
+}
+
+export function lines(entries: Entry[], open: Set<string>): Line[] {
   const out: Line[] = [];
   let run: { id: string; turns: Set<number>; entries: Entry[] } | null = null;
   let transcript: string | null = null;
@@ -52,7 +98,7 @@ function lines(entries: Entry[], open: Set<string>): Line[] {
 }
 
 /** The first entry of the left-behind run that holds `id`, to open it when a jump lands inside. */
-function runOf(entries: Entry[], id: string): string | null {
+export function runOf(entries: Entry[], id: string): string | null {
   let first: string | null = null;
   for (const entry of entries) {
     if (!entry.abandoned) first = null;
@@ -78,9 +124,9 @@ interface Loaded {
 
 type Opened = EntryContent | 'loading' | 'error';
 
-function fromPage(page: EntryPage, generation: number, open: Set<string>, focus?: string): Loaded {
+function fromPage(page: EntryPage, generation: number, open: Set<string>, found: InlineRecord[], focus?: string): Loaded {
   const entries = shown(page.entries);
-  const drawn = lines(entries, open);
+  const drawn = withRecords(lines(entries, open), found, page.hasBefore, page.hasAfter);
   const at = focus ? drawn.findIndex((l) => l.kind === 'entry' && l.entry.id === focus) : -1;
   return {
     entries,
@@ -116,15 +162,40 @@ function Rule({ label, onClick }: { label: ReactNode; onClick?: () => void }) {
   );
 }
 
-function Row({ entry, opened, flash, abandoned, onToggle }: { entry: Entry; opened?: Opened; flash: boolean; abandoned: boolean; onToggle: () => void }) {
+function Row({ sessionKey, entry, opened, flash, abandoned, onToggle }: { sessionKey: string; entry: Entry; opened?: Opened; flash: boolean; abandoned: boolean; onToggle: () => void }) {
   let text: ReactNode = entry.text;
   let detail: ReactNode = entry.detail;
   if (entry.kind === 'tool') text = entry.tool ?? entry.text;
   // The glyph is the slash: `/compact 182k → 41k tokens` (design system: inline record).
   if ((entry.kind === 'slash' || entry.kind === 'compact') && entry.text.startsWith('/')) text = entry.text.slice(1);
   if (entry.kind === 'sent' || entry.kind === 'received') detail = entry.peer ? `${entry.kind === 'sent' ? 'to' : 'from'} ${entry.peer}` : null;
+  // A mode change: the design system's inline record, with the new mode's badge.
+  if (entry.kind === 'mode') {
+    text = 'mode';
+    detail = <ModeBadge mode={entry.text as Mode} />;
+  }
   let body: ReactNode = null;
   if (opened) body = <Body content={opened} />;
+  else if (entry.images) {
+    // Sent images (design system: ▣ name), opened in the floating layer.
+    body = (
+      <span className="conv-images">
+        {Array.from({ length: entry.images }, (_, n) => (
+          <button
+            key={n}
+            type="button"
+            className="cn-tag tag-button"
+            onClick={(event) => {
+              event.stopPropagation();
+              store.set({ dialog: { kind: 'image', session: sessionKey, entry: entry.id, n } });
+            }}
+          >
+            {glyph('misc', 'image')} image {n + 1}
+          </button>
+        ))}
+      </span>
+    );
+  }
   else if (entry.resultPreview && (entry.kind === 'tool' || entry.kind === 'subagent_started')) {
     // Output stays collapsed to one dim line until opened; a failure keeps the denied glyph and color.
     body = entry.resultError ? (
@@ -220,6 +291,28 @@ function Queue({ session }: { session: Session }) {
   );
 }
 
+/** Background tasks still running (a background command, a background subagent), each with its stop. */
+function Tasks({ session }: { session: Session }) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="queue">
+      {session.tasks.map((task) => (
+        <div key={task.id} className="queue__row tasks__row">
+          <span className={task.type?.includes('agent') ? 'cn-msg--subagent' : 'cn-msg--tool'}>
+            {glyph('message', task.type?.includes('agent') ? 'subagent_started' : 'tool')}
+          </span>
+          <span className="cn-ellipsis queue__text">{task.description}</span>
+          <span className="cn-dim">in the background</span>
+          <button type="button" className="link-button" onClick={() => api.stopTask(session.id, task.id).catch((failure: unknown) => setError(reason(failure)))}>
+            {glyph('status', 'stopped')} stop
+          </button>
+        </div>
+      ))}
+      {error ? <span className="cn-status--error">{glyph('status', 'error')} {error}</span> : null}
+    </div>
+  );
+}
+
 /** The name in the pane header, edited in place (C-Space , or a double-click): enter saves, esc cancels. */
 function Name({ session }: { session: Session }) {
   const renaming = useStore((s) => s.renaming === session.id);
@@ -263,11 +356,11 @@ function Name({ session }: { session: Session }) {
 /**
  * The design system's StatusLine: model │ @branch │ ctx │ mode │ mcp │ cost. On the web its segments take a click
  * (design system: Claude Code features): the model opens the model picker, the context bar its breakdown, the mode
- * badge the mode menu, mcp the MCP servers.
+ * badge the mode menu, mcp the MCP servers, the cost the usage card.
  */
 function Status({ session }: { session: Session }) {
   const managed = session.kind === 'managed';
-  const open = (kind: 'model' | 'context' | 'mode' | 'mcp') => store.set({ dialog: { kind, session: session.id } });
+  const open = (kind: 'model' | 'context' | 'mode' | 'mcp' | 'usage') => store.set({ dialog: { kind, session: session.id } });
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     const line = target.closest('.cn-statusline');
@@ -275,6 +368,7 @@ function Status({ session }: { session: Session }) {
     const segment = [...line.children].find((child) => child.contains(target));
     if (!segment) return;
     if (segment.classList.contains('cn-ctx')) open('context');
+    else if (segment.classList.contains('cn-statusline__cost')) open('usage');
     else if (!managed) return;
     else if (segment === line.firstElementChild) open('model');
     else if (segment.matches('.cn-chip, .cn-mode')) open('mode');
@@ -295,8 +389,47 @@ function Status({ session }: { session: Session }) {
   );
 }
 
+/**
+ * C-Space [ (design system: scroll mode, as tmux's copy mode): vi keys move through the conversation while the prompt
+ * box keeps its text. q or esc ends it; / opens find.
+ */
+function useScrollMode(on: boolean, section: RefObject<HTMLElement | null>, toEnd: () => void) {
+  useEffect(() => {
+    if (!on) return;
+    (document.activeElement as HTMLElement | null)?.blur();
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const scroller = section.current?.querySelector<HTMLElement>('[data-virtuoso-scroller]');
+      if (!scroller) return;
+      const half = scroller.clientHeight / 2;
+      const by: Record<string, number> = { j: ROW_PX, ArrowDown: ROW_PX, k: -ROW_PX, ArrowUp: -ROW_PX, d: half, u: -half, f: half * 2, b: -half * 2, PageDown: half * 2, PageUp: -half * 2 };
+      if (event.key in by) scroller.scrollBy({ top: by[event.key] });
+      else if (event.key === 'g') scroller.scrollTo({ top: 0 });
+      else if (event.key === 'G') toEnd();
+      else if (event.key === '/') store.set({ scroll: null, dialog: { kind: 'find' } });
+      else if (event.key === 'q' || event.key === 'Escape') store.set({ scroll: null });
+      else return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [on]);
+}
+
 export function Conversation({ id }: { id: string }) {
   const session = useStore((s) => s.sessions[id]);
+  const pane = usePane();
+  const zoomed = useStore((s) => s.zoomed);
+  const paneFocus = useStore((s) => s.paneFocus);
+  const section = useRef<HTMLElement>(null);
+  const scrolling = useStore((s) => s.scroll !== null && s.scroll === pane.id);
+  useScrollMode(scrolling, section, () => list.current?.scrollToIndex({ index: 'LAST', align: 'end' }));
+  // A key moved here (C-Space h j k l, o, a window): the prompt box takes the keys, unless a card already has them.
+  useEffect(() => {
+    if (!pane.focused || !paneFocus || section.current?.contains(document.activeElement)) return;
+    section.current?.querySelector<HTMLElement>('.cn-card[tabindex="0"], textarea')?.focus();
+  }, [paneFocus, pane.focused]);
   const sessions = useStore((s) => s.sessions);
   const jump = useStore((s) => s.jump);
   const now = useStore((s) => s.now);
@@ -310,11 +443,22 @@ export function Conversation({ id }: { id: string }) {
   const generation = useRef(0);
   const runsRef = useRef(runs);
   runsRef.current = runs;
+  const found = useMemo(() => (session ? records(session) : []), [session?.forkOf, session?.forks]);
+  const recordsRef = useRef(found);
+  recordsRef.current = found;
+  const list = useRef<VirtuosoHandle>(null);
+  const settleUntil = useRef(0);
+  // Virtuoso places the last row by guessed heights, then keeps the top row still as it measures the real ones:
+  // until you scroll or click, follow the end instead.
+  useEffect(() => {
+    settleUntil.current = data?.start.align === 'end' ? Date.now() + SETTLE_MS : 0;
+  }, [data?.generation]);
+  const unsettle = () => (settleUntil.current = 0);
 
   const loadTail = useCallback(() => {
     const mine = ++generation.current;
     return api.entries(id, { limit: PAGE }).then(
-      (page) => mine === generation.current && setData(fromPage(page, mine, runsRef.current)),
+      (page) => mine === generation.current && setData(fromPage(page, mine, runsRef.current, recordsRef.current)),
       () => {}, // not known to the server yet (a session just started): the effect below asks again
     );
   }, [id]);
@@ -343,7 +487,7 @@ export function Conversation({ id }: { id: string }) {
       const run = runOf(shown(page.entries), jump.entry);
       const open = run ? new Set([...runsRef.current, run]) : runsRef.current;
       setRuns(open);
-      setData(fromPage(page, mine, open, jump.entry));
+      setData(fromPage(page, mine, open, recordsRef.current, jump.entry));
       setFlash(jump.entry);
       window.setTimeout(() => setFlash(null), FLASH_MS);
     });
@@ -387,7 +531,9 @@ export function Conversation({ id }: { id: string }) {
           if (!d) return d;
           const entries = [...shown(page.entries), ...d.entries];
           // Virtuoso counts lines, not entries: move the first index by the lines this page adds.
-          const added = lines(entries, runsRef.current).length - lines(d.entries, runsRef.current).length;
+          const count = (list: Entry[], before: boolean) =>
+            withRecords(lines(list, runsRef.current), recordsRef.current, before, d.hasAfter).length;
+          const added = count(entries, page.hasBefore) - count(d.entries, d.hasBefore);
           return { ...d, entries, first: d.first - added, firstSeq: page.entries[0]?.seq ?? d.firstSeq, hasBefore: page.hasBefore };
         }),
       )
@@ -419,7 +565,10 @@ export function Conversation({ id }: { id: string }) {
     );
   };
 
-  const drawn = useMemo(() => (data ? lines(data.entries, runs) : []), [data, runs]);
+  const drawn = useMemo(
+    () => (data ? withRecords(lines(data.entries, runs), found, data.hasBefore, data.hasAfter) : []),
+    [data, runs, found],
+  );
 
   // Virtuoso needs a components object every render: swapping it for undefined crashes the list.
   const managed = session?.kind === 'managed';
@@ -437,43 +586,63 @@ export function Conversation({ id }: { id: string }) {
   if (!session) {
     return <div className="conv-empty cn-dim">starting{glyph('misc', 'ellipsis')}</div>;
   }
-  const classes = ['cn-pane', 'cn-pane--focused', 'pane'];
+  const classes = ['cn-pane', 'pane'];
+  if (pane.focused) classes.push('cn-pane--focused');
+  if (pane.focused && zoomed) classes.push('cn-pane--zoomed');
   if (session.kind === 'external') classes.push('cn-pane--external');
   if (session.mode === 'bypassPermissions') classes.push('cn-pane--bypass');
   if (session.status === 'waiting') classes.push('cn-pane--waiting');
 
   return (
-    <section className={classes.join(' ')} aria-label={`pane ${n}: ${session.name}`}>
+    <section ref={section} className={classes.join(' ')} aria-label={`pane ${n}: ${session.name}`}>
       <header className="cn-pane__head">
         <span className="cn-pane__index">{n}</span>
         <Name session={session} />
         <KindMark kind={session.kind} />
         <span className="cn-dim cn-ellipsis">{session.project}</span>
         <span className="cn-fill" />
+        {scrolling ? (
+          <>
+            <span className="cn-chip cn-chip--brand">scroll</span>
+            <KeyHints keys={[['j k', 'line'], ['d u', 'half'], ['g G', 'ends'], ['/', 'find'], ['q', 'done']]} />
+          </>
+        ) : null}
         <StatusBadge status={session.status} age={ago(session.lastActivityAt, now)} />
         {managed ? (
           <HeadButton text={`${glyph('status', 'stopped')} stop`} label="stop this session" chord="C-Space &" onClick={() => store.set({ dialog: { kind: 'stop', session: session.id } })} />
         ) : (
           <HeadButton text={`${glyph('kind', 'managed')} adopt`} label="adopt this session: resume it here" chord="A" onClick={() => store.set({ dialog: { kind: 'adopt', session: session.id } })} />
         )}
-        <HideButton label="minimize the pane" chord="C-Space x" onClick={() => store.toggle('pane')} />
+        <HideButton label={closeLabel()} chord="C-Space x" onClick={() => closePane(pane.id)} />
       </header>
-      <div className="cn-pane__conv conv" role="log">
+      <div className="cn-pane__conv conv" role="log" onWheel={unsettle} onPointerDown={unsettle} onKeyDown={unsettle}>
         {!session.transcriptExists ? (
           <div className="conv-empty cn-dim">no prompt yet</div>
         ) : data ? (
           <Virtuoso
             key={data.generation}
+            ref={list}
             data={drawn}
+            totalListHeightChanged={() => {
+              if (Date.now() < settleUntil.current) list.current?.scrollToIndex({ index: 'LAST', align: 'end' });
+            }}
             firstItemIndex={data.first}
             initialTopMostItemIndex={data.start}
-            computeItemKey={(_, line) => (line.kind === 'entry' ? line.entry.id : `run:${line.id}`)}
+            computeItemKey={(_, line) => (line.kind === 'entry' ? line.entry.id : `${line.kind}:${line.id}`)}
             startReached={older}
             endReached={newer}
             followOutput={(atBottom) => (atBottom && !data.hasAfter ? 'auto' : false)}
             components={components}
             itemContent={(_, line) =>
-              line.kind === 'rewound' ? (
+              line.kind === 'record' ? (
+                <div
+                  className={`conv-row conv-row--record${line.session ? '' : ' conv-row--still'}`}
+                  onClick={line.session ? () => store.focus(line.session!) : undefined}
+                  title={line.session ? 'open it' : undefined}
+                >
+                  <MessageRow type="slash" text={line.text} detail={line.detail} />
+                </div>
+              ) : line.kind === 'rewound' ? (
                 <Rule
                   label={
                     <>
@@ -491,7 +660,7 @@ export function Conversation({ id }: { id: string }) {
               ) : (
                 <>
                   {line.cleared ? <Rule label="cleared" /> : null}
-                  <Row entry={line.entry} opened={opened[line.entry.id]} flash={flash === line.entry.id} abandoned={line.abandoned} onToggle={() => toggle(line.entry)} />
+                  <Row sessionKey={id} entry={line.entry} opened={opened[line.entry.id]} flash={flash === line.entry.id} abandoned={line.abandoned} onToggle={() => toggle(line.entry)} />
                 </>
               )
             }
@@ -500,7 +669,7 @@ export function Conversation({ id }: { id: string }) {
           <div className="conv-empty cn-dim">loading{glyph('misc', 'ellipsis')}</div>
         )}
       </div>
-      {session.status === 'waiting' || session.pending.length || session.error || session.queued.length ? (
+      {session.status === 'waiting' || session.pending.length || session.error || session.queued.length || session.tasks.length ? (
         <div className="cn-pane__dock">
           {session.pending.length ? <AnswerCard session={session} /> : null}
           {session.status === 'waiting' && (!session.pending.length || (session.kind === 'external' && session.tmux)) ? <Waiting session={session} /> : null}
@@ -510,6 +679,7 @@ export function Conversation({ id }: { id: string }) {
             </div>
           ) : null}
           {session.queued.length ? <Queue session={session} /> : null}
+          {session.tasks.length ? <Tasks session={session} /> : null}
         </div>
       ) : null}
       {managed || session.inbox ? (

@@ -1,4 +1,4 @@
-import { KeyHints, TreeFilter, TreeRow, glyph } from '@ds';
+import { KeyHints, TreeFilter, TreeRow, glyph, label as dsLabel } from '@ds';
 import { type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { api } from './api';
@@ -9,7 +9,7 @@ import { numbered, store, useStore } from './store';
 /** Filter chips (keys 1–7) and the entry kinds each one covers. Thinking never shows in the tree. */
 const CHIPS = [
   { type: 'prompt', kinds: ['prompt', 'interrupt'] },
-  { type: 'slash', kinds: ['slash', 'compact'] },
+  { type: 'slash', kinds: ['slash', 'compact', 'mode'] },
   { type: 'tool', kinds: ['tool', 'denied'] },
   { type: 'question', kinds: ['question', 'answer'] },
   { type: 'peer', kinds: ['sent', 'received'] },
@@ -20,7 +20,7 @@ type ChipType = (typeof CHIPS)[number]['type'];
 const CHIP_OF = new Map<string, ChipType>(CHIPS.flatMap((c) => c.kinds.map((k) => [k, c.type] as const)));
 const ALL_BUT_PEER = new Set<ChipType>(CHIPS.map((c) => c.type).filter((t) => t !== 'peer'));
 
-type Row =
+export type Row =
   | { key: string; depth: 0; type: 'project'; cwd: string; name: string; count: number }
   | { key: string; depth: 1; type: 'session'; session: Session; n: number }
   | { key: string; depth: 2; type: 'turn'; session: string; turn: Turn }
@@ -31,9 +31,9 @@ type Placed = Row & { guides: boolean[]; last: boolean; hasChildren: boolean };
 const turnKey = (session: string, turn: number) => `t:${session}:${turn}`;
 
 /** The glyph says slash: the label doesn't repeat it (`/compact 182k → 41k`). */
-const slashless = (entry: Entry) => ((entry.kind === 'slash' || entry.kind === 'compact') && entry.text.startsWith('/') ? entry.text.slice(1) : entry.text);
+export const slashless = (entry: Entry) => ((entry.kind === 'slash' || entry.kind === 'compact') && entry.text.startsWith('/') ? entry.text.slice(1) : entry.text);
 
-function label(row: Row): string {
+export function label(row: Row): string {
   switch (row.type) {
     case 'project':
       return row.name;
@@ -42,6 +42,7 @@ function label(row: Row): string {
     case 'turn':
       return slashless(row.turn.entry);
     case 'entry':
+      if (row.entry.kind === 'mode') return `mode ${dsLabel('mode', row.entry.text)}`;
       return row.entry.kind === 'tool' ? `${row.entry.tool ?? ''} ${row.entry.detail ?? ''}` : slashless(row.entry);
     default:
       return '';
@@ -360,6 +361,7 @@ export function MessageTree() {
           computeItemKey={(_, row) => row.key}
           itemContent={(_, row) => (
             <div
+              className={row.type === 'entry' && row.entry.kind === 'interrupt' ? 'tree-row--interrupt' : undefined}
               onClick={() => {
                 setCursor(row.key);
                 if (row.hasChildren) toggle(row.key);
@@ -429,7 +431,7 @@ function TreeRowFor({ row, expanded, cursor, off, match, outsideLink, now, onAct
 }
 
 /** Adds the tree guides: for each ancestor, whether a later sibling follows (draw │), and whether this row is last. */
-function place(rows: Row[], hasChildren: (row: Row) => boolean): Placed[] {
+export function place(rows: Row[], hasChildren: (row: Row) => boolean): Placed[] {
   const placed: Placed[] = [];
   const nextSiblingAt = (i: number) => {
     for (let j = i + 1; j < rows.length; j++) {

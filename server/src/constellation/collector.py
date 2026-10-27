@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from . import inbox
+from . import inbox, usage
 from .claude import files
 from .claude.transcript import Item, Timeline, Transcript
 from .hooks import Reports
@@ -25,26 +25,31 @@ from .protocol import (
     EntryContent,
     EntryPage,
     Event,
+    ForkLink,
     GraphEvent,
     LinkMessage,
     McpSummary,
     PendingRequest,
     RewindPreview,
+    SearchHit,
     Session,
     SessionEvent,
     SessionRemovedEvent,
     Snapshot,
     Subagent,
+    TaskInfo,
+    Totals,
+    TotalsEvent,
     Turn,
+    UsageReport,
+    UsageTurn,
 )
+from .resources import Sampler, Settings, alerts
 
 STALE_AFTER_MS = 30 * 60 * 1000  # idle this long is "stale" (design system: forgotten threshold)
 WAITING_RECHECK_S = 3.0
 RESET_ABOVE = 1000  # a read this big is sent as a reset: clients refetch instead
 MODES = {"default", "plan", "acceptEdits", "auto", "bypassPermissions", "dontAsk"}
-# Context window per model, in tokens, checked against Claude Code's own status line. Managed sessions add
-# the models they use as they report them (get_context_usage).
-CONTEXT_WINDOW = {"claude-opus-5-5": 1_000_000, "claude-haiku-5-5": 1_000_000}
 SOCKET_PID = re.compile(r"/(\d+)\.sock$")
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 ACTIVITY_KINDS = {"prompt", "slash", "tool", "question", "answer", "denied", "sent", "received", "reply"}
@@ -92,12 +97,19 @@ class Collector:
         manager: Manager | None = None,
         hooks: Reports | None = None,
         ignore: set[str] | None = None,
+        sampler: Sampler | None = None,
+        settings: Settings | None = None,
     ):
         self.claude_dir = claude_dir
+        self.sampler = sampler or Sampler()
+        self.settings = settings or Settings()
+        self.limits = self.settings.limits()
+        self.today = usage.Today(claude_dir)
+        self._sent_totals: dict | None = None
         self.manager = manager
         self.hooks = hooks or Reports()
         self.ignore = ignore or set()  # folders whose sessions are Constellation's own helpers (summaries)
-        self.summaries: dict[str, tuple[str, int]] = {}  # node id -> (model-written line, unix ms)
+        self.summaries: dict[str, tuple[str, int, str]] = {}  # node id -> (one line, unix ms, source)
         self._call_inputs: dict[str, dict] = {}  # open calls' inputs, read from the transcript once
         self.lock = threading.RLock()
         self.nodes: dict[str, Node] = {}
@@ -146,6 +158,7 @@ class Collector:
                     else:
                         events.append(EntriesEvent(session=node.key, entries=[i.wire() for i in changed]))
                 self._load_subagent_meta(node)
+                self._read_subagent_usage(node)
 
             self._refresh_waiting()
             for node in self.nodes.values():
@@ -160,7 +173,34 @@ class Collector:
             if dumped != self._sent_graph:
                 self._sent_graph = dumped
                 events.append(graph)
+            totals = self._totals()
+            dumped = totals.model_dump()
+            if dumped != self._sent_totals:
+                self._sent_totals = dumped
+                events.append(TotalsEvent(totals=totals))
             return [] if backlog else events
+
+    def sample(self) -> None:
+        """Resources of every session's process tree, and today's cost (roadmap 4.1-4.3). Runs beside poll()."""
+        with self.lock:
+            roots = {key: node.registry["pid"] for key, node in self.nodes.items()}
+        self.sampler.sample(roots)
+        self.settings.gpu_total = self.sampler.gpu_total
+        self.limits = self.settings.limits()
+        self.today.refresh()
+
+    def _totals(self) -> Totals:
+        return Totals(today_usd=round(self.today.usd, 2) if self.today.day else None)
+
+    def _read_subagent_usage(self, node: Node) -> None:
+        ledger = node.timeline.ledger
+        for transcript in node.transcripts:
+            for agent_id, agent in transcript.agents.items():
+                if agent_id in ledger.finished:
+                    continue
+                ledger.subagent(transcript.path.with_suffix("") / "subagents" / f"agent-{agent_id}.jsonl")
+                if agent.get("status") == "reported":
+                    ledger.finished.add(agent_id)
 
     def _load_subagent_meta(self, node: Node) -> None:
         for transcript in node.transcripts:
@@ -227,9 +267,9 @@ class Collector:
         if status == "idle" and last and time.time() * 1000 - last > STALE_AFTER_MS:
             status = "stale"
         context = None
-        if (usage := cur.context()) is not None:
-            used_by, used = usage
-            window = (manager.windows.get(used_by) if manager else None) or CONTEXT_WINDOW.get(used_by)
+        if (in_context := cur.context()) is not None:
+            used_by, used = in_context
+            window = (manager.windows.get(used_by) if manager else None) or usage.window(used_by)
             context = Context(
                 model=used_by,
                 used_tokens=used,
@@ -241,6 +281,20 @@ class Collector:
             states = [m.get("status") for m in managed.mcp if m.get("status") != "disabled"]
             mcp = McpSummary(connected=states.count("connected"), failed=states.count("failed"), total=len(states))
         summary = self.summaries.get(node.key)
+        started = r.get("startedAt") or 0
+        if managed is not None and managed.cost_usd is not None:
+            cost, estimated = managed.cost_usd, False
+        else:
+            cost, estimated = tl.ledger.cost(started)
+        resources, minutes = self.sampler.get(node.key)
+        fork_of, forks = None, []
+        for fork in manager.forks if manager else []:
+            if fork.child == node.key:
+                parent = self.nodes.get(fork.parent or "")
+                name = parent.registry.get("name") if parent else fork.parent_name
+                fork_of = ForkLink(session=fork.parent if parent else None, name=name or fork.parent_name, at=fork.at)
+            elif fork.parent == node.key and (child := self.nodes.get(fork.child)):
+                forks.append(ForkLink(session=fork.child, name=child.registry.get("name") or "fork", at=fork.at))
         return Session(
             id=node.key,
             session_id=r["sessionId"],
@@ -255,7 +309,7 @@ class Collector:
             branch=cur.branch,
             tmux=r.get("tmux"),
             version=r.get("version"),
-            started_at=r.get("startedAt") or 0,
+            started_at=started,
             status=status,
             raw_status=raw,
             waiting_for=waiting_for,
@@ -267,7 +321,7 @@ class Collector:
             step=cur.step,
             away_summary=cur.away_summary,
             context=context,
-            cost_usd=managed.cost_usd if managed and managed.cost_usd is not None else cur.cost_usd,
+            cost_usd=round(cost, 4) if cost is not None else None,
             pr_links=cur.pr_links,
             artifacts=cur.artifacts,
             turns=tl.turn,
@@ -278,6 +332,7 @@ class Collector:
             model=model,
             summary=summary[0] if summary else None,
             summary_at=summary[1] if summary else None,
+            summary_source=summary[2] if summary else None,
             inbox=managed is None and inbox.reachable(r),
             adopting=bool(manager and node.key in manager.adopting),
             replaces=managed.replaces if managed else None,
@@ -287,6 +342,17 @@ class Collector:
             error=managed.error if managed else None,
             effort=managed.effort if managed else None,
             mcp=mcp,
+            tasks=[
+                TaskInfo(id=task_id, description=task.get("description") or "", type=task.get("type"))
+                for task_id, task in list(managed.tasks.items())
+            ]
+            if managed
+            else [],
+            fork_of=fork_of,
+            forks=forks,
+            cost_estimated=estimated,
+            resources=resources,
+            alerts=alerts(context.percent if context else None, resources, minutes, self.limits),
         )
 
     def _open_call(self, node: Node, waiting_for: str | None) -> list[PendingRequest]:
@@ -404,6 +470,44 @@ class Collector:
                 edges=graph.edges,
                 endpoints=graph.endpoints,
                 subagents=graph.subagents,
+                totals=self._totals(),
+            )
+
+    def usage(self, key: str) -> UsageReport | None:
+        """Tokens per turn (the last 30), and what this process used and cost since it started."""
+        with self.lock:
+            node = self.nodes.get(key)
+            if node is None:
+                return None
+            ledger = node.timeline.ledger
+            session = self._session(node)
+            spent = ledger.since(session.started_at)
+            by_model: dict[str, float] = {}
+            for reply in ledger.replies.values():
+                if reply.at >= session.started_at and reply.model:
+                    by_model[reply.model] = round(by_model.get(reply.model, 0) + reply.tokens.cost, 4)
+            turns = [
+                UsageTurn(
+                    turn=turn,
+                    input=t.input,
+                    cache_write=t.cache_write,
+                    cache_read=t.cache_read,
+                    output=t.output,
+                    cost_usd=round(t.cost, 4),
+                )
+                for turn, t in sorted(ledger.turns.items())[-30:]
+                if t.total
+            ]
+            return UsageReport(
+                turns=turns,
+                since=session.started_at,
+                input=spent.input,
+                cache_write=spent.cache_write,
+                cache_read=spent.cache_read,
+                output=spent.output,
+                cost_usd=session.cost_usd,
+                estimated=session.cost_estimated,
+                by_model=by_model,
             )
 
     def page(
@@ -440,6 +544,23 @@ class Collector:
                     end = min(end, before)
                 chosen = items[start:end]
             return EntryPage(entries=[i.wire() for i in chosen], has_before=start > 0, has_after=end < len(items))
+
+    def search(self, query: str, limit: int = 50) -> list[SearchHit]:
+        """C-Space f (design system): every running session's messages whose line, as the tree shows it, has the
+        query. Newest first. Thinking and left-behind branches stay out."""
+        q = query.strip().lower()
+        if not q:
+            return []
+        hits: list[tuple[str, int, str, Item]] = []
+        with self.lock:
+            for node in self.nodes.values():
+                for item in node.timeline.items:
+                    if item.kind == "thinking" or item.abandoned:
+                        continue
+                    if q in item.text.lower() or (item.detail and q in item.detail.lower()):
+                        hits.append((item.at or "", item.seq, node.key, item))
+            hits.sort(key=lambda h: (h[0], h[1]), reverse=True)
+            return [SearchHit(session=key, entry=item.wire()) for _, _, key, item in hits[:limit]]
 
     def turns(self, key: str) -> list[Turn] | None:
         with self.lock:
@@ -520,10 +641,62 @@ class Collector:
                     lines.append(f"{item.kind}: {item.text}" + (f" {item.detail}" if item.detail else ""))
             return cur.title or cur.ai_title or cur.first_prompt, lines
 
+    def _last_step_at(self, node: Node) -> int:
+        for item in reversed(node.timeline.items):
+            if item.kind in ACTIVITY_KINDS and not item.abandoned and (at := to_ms(item.at)):
+                return at
+        return 0
+
+    def summary_for_free(self, key: str) -> tuple[str, int, str] | None:
+        """A summary that needs no model call (roadmap 5.4): the one already made, if nothing happened since; else
+        Claude Code's own recap (away_summary), if nothing happened since it was written."""
+        with self.lock:
+            node = self.nodes.get(key)
+            if node is None:
+                return None
+            last = self._last_step_at(node)
+            made = self.summaries.get(key)
+            if made and made[1] >= last:
+                return made
+            cur = node.current
+            if cur.away_summary and cur.away_summary_at and cur.away_summary_at >= last:
+                return cur.away_summary, cur.away_summary_at, "claude"
+            return None
+
     def running(self) -> dict[str, str]:
         """Every session id a live process has open, to its node."""
         with self.lock:
             return {t.session_id: n.key for n in self.nodes.values() for t in n.transcripts}
+
+    def prompts(self, cwd: str, limit: int = 100) -> list[tuple[str, int]]:
+        """The prompts of the sessions running in `cwd`, whole, with when they were sent: Constellation's own prompts
+        never reach Claude Code's history file, so C-r adds these."""
+        with self.lock:
+            picked = []
+            for node in self.nodes.values():
+                if node.registry.get("cwd") != cwd:
+                    continue
+                transcripts = {t.session_id: t for t in node.transcripts}
+                items = [i for i in node.timeline.items if i.kind == "prompt" and not i.abandoned][-limit:]
+                picked.extend((transcripts.get(i.session_id), i) for i in items)
+        found = []
+        for transcript, item in picked:  # file reads outside the lock
+            try:
+                text = transcript.content(item).text if transcript else item.text
+            except (OSError, ValueError):
+                text = item.text
+            found.append((text, to_ms(item.at) or 0))
+        return found
+
+    def image(self, key: str, entry_id: str, n: int) -> tuple[str, bytes] | None:
+        """The n-th image sent with a prompt."""
+        with self.lock:
+            node = self.nodes.get(key)
+            item = node.timeline.by_id.get(entry_id) if node else None
+            transcript = node.transcript(item.session_id) if node and item else None
+        if item is None or transcript is None or n >= item.images:
+            return None
+        return transcript.image(item, n)  # file read outside the lock
 
     def model_of(self, key: str) -> str | None:
         with self.lock:

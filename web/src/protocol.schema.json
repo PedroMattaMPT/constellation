@@ -1,5 +1,38 @@
 {
   "$defs": {
+    "Alert": {
+      "additionalProperties": false,
+      "description": "A threshold crossed (design system): context, runaway CPU, or memory or GPU against your limits.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "ctx",
+            "cpu",
+            "mem",
+            "gpu"
+          ],
+          "type": "string"
+        },
+        "level": {
+          "enum": [
+            "warning",
+            "critical"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "description": "What crossed, in the design system's words: 'GPU 21.4/20 GB', 'context 97%'.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "level",
+        "text"
+      ],
+      "title": "Alert",
+      "type": "object"
+    },
     "AnswerRequest": {
       "additionalProperties": false,
       "description": "Answer a pending request. For a question, `updated_input` carries the tool input plus `answers`.",
@@ -415,7 +448,8 @@
             "thinking",
             "interrupt",
             "compact",
-            "notice"
+            "notice",
+            "mode"
           ],
           "type": "string"
         },
@@ -532,6 +566,11 @@
           "default": false,
           "description": "On a branch a rewind left: not part of the conversation any more.",
           "type": "boolean"
+        },
+        "images": {
+          "default": 0,
+          "description": "Prompts: the images sent with it (GET .../entries/{id}/images/{n}).",
+          "type": "integer"
         }
       },
       "required": [
@@ -551,7 +590,8 @@
         "msgId",
         "agentId",
         "sessionId",
-        "abandoned"
+        "abandoned",
+        "images"
       ],
       "title": "Entry",
       "type": "object"
@@ -627,6 +667,104 @@
         "hasAfter"
       ],
       "title": "EntryPage",
+      "type": "object"
+    },
+    "FileMatch": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Relative to the session's folder; folders end in /.",
+          "type": "string"
+        },
+        "folder": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "folder"
+      ],
+      "title": "FileMatch",
+      "type": "object"
+    },
+    "FileMatches": {
+      "additionalProperties": false,
+      "description": "`@` mentions: the project's files and folders that match, best first.",
+      "properties": {
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/FileMatch"
+          },
+          "type": "array"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "matches",
+        "total"
+      ],
+      "title": "FileMatches",
+      "type": "object"
+    },
+    "FolderMatches": {
+      "additionalProperties": false,
+      "description": "Folder completion for the launcher.",
+      "properties": {
+        "folder": {
+          "description": "What was typed is a folder.",
+          "type": "boolean"
+        },
+        "matches": {
+          "description": "Folders that complete it, ending in /.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "folder",
+        "matches",
+        "total"
+      ],
+      "title": "FolderMatches",
+      "type": "object"
+    },
+    "ForkLink": {
+      "additionalProperties": false,
+      "description": "One end of a fork: the session it came from, or one made from it.",
+      "properties": {
+        "session": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Node id, while that session runs."
+        },
+        "name": {
+          "type": "string"
+        },
+        "at": {
+          "description": "Unix ms: where the record goes in the conversation.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session",
+        "name",
+        "at"
+      ],
+      "title": "ForkLink",
       "type": "object"
     },
     "ForkRequest": {
@@ -733,6 +871,100 @@
         "data"
       ],
       "title": "ImageInput",
+      "type": "object"
+    },
+    "Limits": {
+      "additionalProperties": false,
+      "description": "What a session may use before it's an alert (roadmap 4.5): 80% of a limit is a warning, past it critical.",
+      "properties": {
+        "memoryGb": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per session. Default: a quarter of this machine's memory."
+        },
+        "gpuGb": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per session. Default: the GPU's memory. None without a GPU."
+        },
+        "cpuPercent": {
+          "default": 200,
+          "description": "Busy above this for 5 minutes is runaway CPU (a warning).",
+          "type": "number"
+        }
+      },
+      "required": [
+        "memoryGb",
+        "gpuGb",
+        "cpuPercent"
+      ],
+      "title": "Limits",
+      "type": "object"
+    },
+    "LimitsRequest": {
+      "additionalProperties": false,
+      "description": "Change some limits; a field left out stays. `reset` puts every limit back to its default.",
+      "properties": {
+        "memoryGb": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "gpuGb": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cpuPercent": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "reset": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "memoryGb",
+        "gpuGb",
+        "cpuPercent",
+        "reset"
+      ],
+      "title": "LimitsRequest",
       "type": "object"
     },
     "LinkMessage": {
@@ -954,6 +1186,49 @@
       "title": "ModelRequest",
       "type": "object"
     },
+    "NoticeEvent": {
+      "additionalProperties": false,
+      "description": "Something the server did on its own went wrong (adopting a session): shown until dismissed.",
+      "properties": {
+        "type": {
+          "const": "notice",
+          "default": "notice",
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "at": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "text",
+        "at"
+      ],
+      "title": "NoticeEvent",
+      "type": "object"
+    },
+    "PastPrompt": {
+      "additionalProperties": false,
+      "description": "A prompt from your history in that folder (~/.claude/history.jsonl), for C-r.",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "at": {
+          "description": "Unix ms.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "text",
+        "at"
+      ],
+      "title": "PastPrompt",
+      "type": "object"
+    },
     "PastSession": {
       "additionalProperties": false,
       "description": "A session in the resume picker (list_sessions).",
@@ -1171,6 +1446,68 @@
       "title": "RenameRequest",
       "type": "object"
     },
+    "Resources": {
+      "additionalProperties": false,
+      "description": "What a session's process tree costs the machine (roadmap 4.1, 4.2), sampled every few seconds.",
+      "properties": {
+        "cpu": {
+          "description": "Percent of one core, now: 200 is two cores busy.",
+          "type": "number"
+        },
+        "memory": {
+          "description": "Resident memory of the process tree, bytes.",
+          "type": "integer"
+        },
+        "gpu": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "GPU memory of the process tree, bytes. None without nvidia-smi."
+        },
+        "processes": {
+          "description": "Processes in the tree: claude, its shells, MCP servers, dev servers.",
+          "type": "integer"
+        },
+        "cpuHistory": {
+          "description": "One value per minute, oldest first, up to 30: its average.",
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "memoryHistory": {
+          "description": "One value per minute, oldest first, up to 30: its peak.",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "gpuHistory": {
+          "description": "As memory_history, for GPU memory. Empty without a GPU.",
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "cpu",
+        "memory",
+        "gpu",
+        "processes",
+        "cpuHistory",
+        "memoryHistory",
+        "gpuHistory"
+      ],
+      "title": "Resources",
+      "type": "object"
+    },
     "ResumeRequest": {
       "additionalProperties": false,
       "properties": {
@@ -1250,6 +1587,24 @@
         "conversation"
       ],
       "title": "RewindRequest",
+      "type": "object"
+    },
+    "SearchHit": {
+      "additionalProperties": false,
+      "description": "GET /api/search: one message that matches, in the session it's in.",
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "entry": {
+          "$ref": "#/$defs/Entry"
+        }
+      },
+      "required": [
+        "session",
+        "entry"
+      ],
+      "title": "SearchHit",
       "type": "object"
     },
     "Session": {
@@ -1556,6 +1911,22 @@
           ],
           "default": null
         },
+        "summarySource": {
+          "anyOf": [
+            {
+              "enum": [
+                "model",
+                "claude"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "model: a small model wrote it. claude: Claude Code's own recap, current, so no call."
+        },
         "inbox": {
           "default": false,
           "description": "It has an inbox socket Constellation can send a peer message to.",
@@ -1638,6 +2009,56 @@
             }
           ],
           "default": null
+        },
+        "tasks": {
+          "description": "Background tasks still running (managed).",
+          "items": {
+            "$ref": "#/$defs/TaskInfo"
+          },
+          "type": "array"
+        },
+        "forkOf": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ForkLink"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Forked here from that session."
+        },
+        "forks": {
+          "description": "Sessions forked here from this one.",
+          "items": {
+            "$ref": "#/$defs/ForkLink"
+          },
+          "type": "array"
+        },
+        "costEstimated": {
+          "default": false,
+          "description": "Part of cost_usd is priced here from the transcript: Claude Code hasn't recorded it yet.",
+          "type": "boolean"
+        },
+        "resources": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Resources"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "None until the first sample, or when the process is gone."
+        },
+        "alerts": {
+          "description": "The thresholds it has crossed, most severe first.",
+          "items": {
+            "$ref": "#/$defs/Alert"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -1677,6 +2098,7 @@
         "model",
         "summary",
         "summaryAt",
+        "summarySource",
         "inbox",
         "adopting",
         "replaces",
@@ -1685,7 +2107,13 @@
         "activity",
         "error",
         "effort",
-        "mcp"
+        "mcp",
+        "tasks",
+        "forkOf",
+        "forks",
+        "costEstimated",
+        "resources",
+        "alerts"
       ],
       "title": "Session",
       "type": "object"
@@ -1839,6 +2267,9 @@
             "$ref": "#/$defs/Subagent"
           },
           "type": "array"
+        },
+        "totals": {
+          "$ref": "#/$defs/Totals"
         }
       },
       "required": [
@@ -1847,7 +2278,8 @@
         "sessions",
         "edges",
         "endpoints",
-        "subagents"
+        "subagents",
+        "totals"
       ],
       "title": "Snapshot",
       "type": "object"
@@ -2050,6 +2482,36 @@
       "title": "TagRequest",
       "type": "object"
     },
+    "TaskInfo": {
+      "additionalProperties": false,
+      "description": "A background task of a managed session (a background command, a background subagent).",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "type"
+      ],
+      "title": "TaskInfo",
+      "type": "object"
+    },
     "ToggleRequest": {
       "additionalProperties": false,
       "properties": {
@@ -2061,6 +2523,48 @@
         "enabled"
       ],
       "title": "ToggleRequest",
+      "type": "object"
+    },
+    "Totals": {
+      "additionalProperties": false,
+      "description": "Across the machine, for the status bar.",
+      "properties": {
+        "todayUsd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Today's cost, from every transcript written to today. An estimate: Claude Code's side calls (titles, compaction) never reach a transcript."
+        }
+      },
+      "required": [
+        "todayUsd"
+      ],
+      "title": "Totals",
+      "type": "object"
+    },
+    "TotalsEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "const": "totals",
+          "default": "totals",
+          "type": "string"
+        },
+        "totals": {
+          "$ref": "#/$defs/Totals"
+        }
+      },
+      "required": [
+        "type",
+        "totals"
+      ],
+      "title": "TotalsEvent",
       "type": "object"
     },
     "Turn": {
@@ -2093,6 +2597,102 @@
       ],
       "title": "Turn",
       "type": "object"
+    },
+    "UsageReport": {
+      "additionalProperties": false,
+      "description": "GET /api/sessions/{id}/usage: tokens per turn and this process's split and cost (design system: /usage).",
+      "properties": {
+        "turns": {
+          "description": "The last 30 turns, oldest first, subagents included.",
+          "items": {
+            "$ref": "#/$defs/UsageTurn"
+          },
+          "type": "array"
+        },
+        "since": {
+          "description": "Unix ms: the process's start, which the totals below count from.",
+          "type": "integer"
+        },
+        "input": {
+          "type": "integer"
+        },
+        "cacheWrite": {
+          "type": "integer"
+        },
+        "cacheRead": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "integer"
+        },
+        "costUsd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "As on the session: Claude Code's own figure where it has one."
+        },
+        "estimated": {
+          "type": "boolean"
+        },
+        "byModel": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Cost since the start per model, priced here.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "turns",
+        "since",
+        "input",
+        "cacheWrite",
+        "cacheRead",
+        "output",
+        "costUsd",
+        "estimated",
+        "byModel"
+      ],
+      "title": "UsageReport",
+      "type": "object"
+    },
+    "UsageTurn": {
+      "additionalProperties": false,
+      "properties": {
+        "turn": {
+          "type": "integer"
+        },
+        "input": {
+          "type": "integer"
+        },
+        "cacheWrite": {
+          "type": "integer"
+        },
+        "cacheRead": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "integer"
+        },
+        "costUsd": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "turn",
+        "input",
+        "cacheWrite",
+        "cacheRead",
+        "output",
+        "costUsd"
+      ],
+      "title": "UsageTurn",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -2114,6 +2714,12 @@
         },
         {
           "$ref": "#/$defs/GraphEvent"
+        },
+        {
+          "$ref": "#/$defs/NoticeEvent"
+        },
+        {
+          "$ref": "#/$defs/TotalsEvent"
         }
       ]
     },
@@ -2206,6 +2812,33 @@
     },
     "hookStatus": {
       "$ref": "#/$defs/HookStatus"
+    },
+    "folderMatches": {
+      "$ref": "#/$defs/FolderMatches"
+    },
+    "fileMatches": {
+      "$ref": "#/$defs/FileMatches"
+    },
+    "pastPrompts": {
+      "items": {
+        "$ref": "#/$defs/PastPrompt"
+      },
+      "type": "array"
+    },
+    "limits": {
+      "$ref": "#/$defs/Limits"
+    },
+    "limitsRequest": {
+      "$ref": "#/$defs/LimitsRequest"
+    },
+    "usageReport": {
+      "$ref": "#/$defs/UsageReport"
+    },
+    "searchHits": {
+      "items": {
+        "$ref": "#/$defs/SearchHit"
+      },
+      "type": "array"
     }
   },
   "required": [
@@ -2235,7 +2868,14 @@
     "rewindPreview",
     "rewindRequest",
     "messageRequest",
-    "hookStatus"
+    "hookStatus",
+    "folderMatches",
+    "fileMatches",
+    "pastPrompts",
+    "limits",
+    "limitsRequest",
+    "usageReport",
+    "searchHits"
   ],
   "title": "Protocol",
   "type": "object"

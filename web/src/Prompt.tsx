@@ -1,7 +1,8 @@
 import { CommandMenu, KeyHints, glyph } from '@ds';
 import { type ClipboardEvent, type DragEvent, type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api, reason } from './api';
-import type { CommandInfo, Effort, ImageInput, Mode, Session } from './protocol';
+import type { CommandInfo, Effort, FileMatch, ImageInput, Mode, Session } from './protocol';
+import { FilesMenu, HistoryMenu, mentionAt, useFiles } from './PromptMenus';
 import { store, useStore } from './store';
 
 const MAX_LINES = 6; // design system: the prompt box grows from 1 to 6 lines
@@ -17,6 +18,10 @@ interface Attached {
   name: string;
   size: number;
   image: ImageInput;
+  /** The data URL, for the thumbnail. */
+  url: string;
+  width: number;
+  height: number;
 }
 
 const size = (bytes: number) =>
@@ -26,8 +31,15 @@ function readImage(file: File): Promise<Attached> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const data = String(reader.result).split(',', 2)[1] ?? '';
-      resolve({ name: file.name || 'pasted image', size: file.size, image: { mediaType: file.type as ImageInput['mediaType'], data } });
+      const url = String(reader.result);
+      const data = url.split(',', 2)[1] ?? '';
+      const done = (width: number, height: number) =>
+        resolve({ name: file.name || 'pasted image', size: file.size, image: { mediaType: file.type as ImageInput['mediaType'], data }, url, width, height });
+      // Its size in pixels, for the chip (design system: `▣ schema.png 1280×720`).
+      const probe = new Image();
+      probe.onload = () => done(probe.naturalWidth, probe.naturalHeight);
+      probe.onerror = () => done(0, 0);
+      probe.src = url;
     };
     reader.onerror = () => reject(new Error(`could not read ${file.name}`));
     reader.readAsDataURL(file);
@@ -37,7 +49,7 @@ function readImage(file: File): Promise<Attached> {
 /** How often each command was run from this page, per session: the menu's second ranking key. */
 const used = new Map<string, Map<string, number>>();
 
-function count(session: string, line: string) {
+export function count(session: string, line: string) {
   const name = /^\/(\S+)/.exec(line.trim())?.[1];
   if (!name) return;
   const counts = used.get(session) ?? new Map<string, number>();
@@ -46,7 +58,7 @@ function count(session: string, line: string) {
 }
 
 /** The design system's ranking: prefix matches first, then how often you ran it in this session, then by name. */
-function rank(commands: CommandInfo[], query: string, session: string): CommandInfo[] {
+export function rank(commands: CommandInfo[], query: string, session: string): CommandInfo[] {
   const q = query.toLowerCase();
   const counts = used.get(session);
   const score = (c: CommandInfo) => {
@@ -67,7 +79,7 @@ function rank(commands: CommandInfo[], query: string, session: string): CommandI
 function native(session: Session, line: string): boolean | Promise<unknown> {
   const [command, ...rest] = line.trim().slice(1).split(/\s+/);
   const arg = rest.join(' ');
-  const open = (kind: 'model' | 'context' | 'mcp' | 'rewind' | 'clear') => store.set({ dialog: { kind, session: session.id } });
+  const open = (kind: 'model' | 'context' | 'mcp' | 'rewind' | 'clear' | 'usage') => store.set({ dialog: { kind, session: session.id } });
   switch (command) {
     case 'model':
       if (arg) return api.setModel(session.id, arg);
@@ -77,6 +89,10 @@ function native(session: Session, line: string): boolean | Promise<unknown> {
       return EFFORTS.includes(arg as Effort) ? api.setEffort(session.id, arg as Effort) : false;
     case 'context':
       open('context');
+      return true;
+    case 'usage':
+    case 'cost':
+      open('usage');
       return true;
     case 'mcp':
       if (arg) return false; // /mcp reconnect x: Claude Code's own
@@ -95,7 +111,7 @@ function native(session: Session, line: string): boolean | Promise<unknown> {
       open('clear');
       return true;
     case 'fork':
-      return api.fork(session.id, arg || null).then(({ id }) => store.focus(id));
+      return api.fork(session.id, arg || null).then(({ id }) => store.open(id));
     case 'rename':
       if (arg) return false;
       store.set({ renaming: session.id });
@@ -112,6 +128,8 @@ function native(session: Session, line: string): boolean | Promise<unknown> {
  */
 export function PromptInput({ session }: { session: Session }) {
   const external = session.kind === 'external';
+  // A target of the send-to-several dialog while it's open (design system: the teal prompt edge).
+  const targeted = useStore((s) => s.dialog?.kind === 'broadcast' && s.selected.includes(session.id));
   const running = session.status === 'working';
   const draft = useStore((s) => (s.draft?.session === session.id ? s.draft : null));
   const [value, setValue] = useState('');
@@ -122,6 +140,10 @@ export function PromptInput({ session }: { session: Session }) {
   const [commands, setCommands] = useState<CommandInfo[] | null>(null);
   const [highlighted, setHighlighted] = useState(0);
   const [menuClosed, setMenuClosed] = useState(false);
+  const [caret, setCaret] = useState(0);
+  const [mentionClosed, setMentionClosed] = useState<number | null>(null); // esc closes the @ menu for that mention
+  const [fileHighlighted, setFileHighlighted] = useState(0);
+  const [history, setHistory] = useState(false);
   const lastEsc = useRef(0);
   const field = useRef<HTMLTextAreaElement>(null);
 
@@ -145,6 +167,22 @@ export function PromptInput({ session }: { session: Session }) {
   }, [query]);
   const matches = useMemo(() => (query === null || !commands ? [] : rank(commands, query, session.id)), [commands, query, session.id]);
   const top = Math.max(0, Math.min(highlighted - MENU_ROWS + 1, matches.length - MENU_ROWS));
+
+  // @ mentions a file of the project (managed sessions: Claude Code reads what you mention).
+  const mention = !external && focused && !menuOpen ? mentionAt(value, caret) : null;
+  const mentionOpen = mention !== null && mentionClosed !== mention.start;
+  const files = useFiles(session.id, mentionOpen ? mention.query : null);
+  useEffect(() => setFileHighlighted(0), [mention?.query]);
+  const mentionFile = (match: FileMatch | undefined) => {
+    if (!match || !mention) return;
+    // A folder stays open to keep completing inside it; a file ends the mention with a space.
+    const inserted = `@${match.path}${match.folder ? '' : ' '}`;
+    const next = value.slice(0, mention.start) + inserted + value.slice(caret);
+    const at = mention.start + inserted.length;
+    setValue(next);
+    setCaret(at);
+    requestAnimationFrame(() => field.current?.setSelectionRange(at, at));
+  };
   const shown = matches.slice(top, top + MENU_ROWS);
 
   const attach = async (files: File[]) => {
@@ -196,6 +234,29 @@ export function PromptInput({ session }: { session: Session }) {
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.ctrlKey && event.key === 'r') {
+      event.preventDefault(); // C-r: search your prompts in this folder (Claude Code's key)
+      setHistory(true);
+      return;
+    }
+    if (mentionOpen && files?.matches.length) {
+      const count = files.matches.length;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        setFileHighlighted((h) => (h + (event.key === 'ArrowDown' ? 1 : -1) + count) % count);
+        return;
+      }
+      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && !event.altKey)) {
+        event.preventDefault();
+        mentionFile(files.matches[fileHighlighted]);
+        return;
+      }
+    }
+    if (mentionOpen && event.key === 'Escape') {
+      event.preventDefault();
+      setMentionClosed(mention.start);
+      return;
+    }
     if (menuOpen && !external && matches.length) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
@@ -290,6 +351,27 @@ export function PromptInput({ session }: { session: Session }) {
 
   return (
     <>
+      {history ? (
+        <div className="cn-pane__dock prompt-menu">
+          <HistoryMenu
+            cwd={session.cwd}
+            project={session.project}
+            onUse={(text) => {
+              setHistory(false);
+              setValue(text);
+              requestAnimationFrame(() => field.current?.focus());
+            }}
+            onClose={() => {
+              setHistory(false);
+              requestAnimationFrame(() => field.current?.focus());
+            }}
+          />
+        </div>
+      ) : mentionOpen && mention ? (
+        <div className="cn-pane__dock prompt-menu" onMouseDown={(event) => event.preventDefault()}>
+          <FilesMenu query={mention.query} found={files} highlighted={fileHighlighted} onPick={mentionFile} />
+        </div>
+      ) : null}
       {menuOpen ? (
         <div className="cn-pane__dock prompt-menu" onMouseDown={(event) => event.preventDefault()} onClick={onMenuClick}>
           {external ? (
@@ -329,7 +411,7 @@ export function PromptInput({ session }: { session: Session }) {
         </div>
       ) : null}
       <div
-        className={`cn-prompt prompt${focused ? ' cn-prompt--focused' : ''}${external ? ' cn-prompt--external' : ''}`}
+        className={`cn-prompt prompt${focused ? ' cn-prompt--focused' : ''}${external ? ' cn-prompt--external' : ''}${targeted ? ' cn-prompt--broadcast' : ''}`}
         onDragOver={(event) => event.preventDefault()}
         onDrop={onDrop}
       >
@@ -351,7 +433,9 @@ export function PromptInput({ session }: { session: Session }) {
                 title="remove this image"
                 onClick={() => setImages((current) => current.filter((_, j) => j !== i))}
               >
-                {glyph('misc', 'image')} {attached.name} <span className="cn-dim">{size(attached.size)}</span>
+                {glyph('misc', 'image')} {attached.name}{' '}
+                <span className="cn-dim">{attached.width ? `${attached.width}×${attached.height}` : size(attached.size)}</span>
+                <img className="prompt__thumb" src={attached.url} alt="" />
               </button>
             ))}
           </div>
@@ -366,7 +450,11 @@ export function PromptInput({ session }: { session: Session }) {
             placeholder={external ? `message ${session.name}…` : 'type a prompt, / for commands'}
             aria-label={external ? 'peer message' : 'prompt'}
             spellCheck={false}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={(event) => {
+              setValue(event.target.value);
+              setCaret(event.target.selectionStart);
+            }}
+            onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
             onKeyDown={onKeyDown}
             onPaste={onPaste}
             onFocus={() => setFocused(true)}

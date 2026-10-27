@@ -24,6 +24,18 @@ export function model(session: Session): string {
   return id ? shortModel(id) : '';
 }
 
+/** Tokens in thousands (design system: `182k → 41k`), millions past that. */
+export function count(n: number): string {
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1e3) return `${Math.round(n / 1e3)}k`;
+  return String(n);
+}
+
+/** Memory as the design system writes limits: "1.2 GB", "21.4/20 GB". */
+export function gb(bytes: number): string {
+  return `${(bytes / 1024 ** 3).toFixed(1).replace(/\.0$/, '')} GB`;
+}
+
 export function cost(usd: number | null | undefined): string | undefined {
   return usd == null ? undefined : `$${usd.toFixed(2)}`;
 }
@@ -41,6 +53,7 @@ export function msgType(kind: Entry['kind']): MsgType {
     case 'interrupt':
       return 'denied';
     case 'compact':
+    case 'mode': // a mode change: an inline record, like /compact
       return 'slash';
     default:
       return kind;

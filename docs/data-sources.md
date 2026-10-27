@@ -118,7 +118,7 @@ Counts are from all 136 local transcripts (340,170 lines).
 | `custom-title` | `/rename`: `customTitle`. | name |
 | `ai-title` | Auto title: `aiTitle`. | title |
 | `last-prompt` | `lastPrompt` plus `leafUuid`. | title fallback |
-| `permission-mode`, `mode` | `permissionMode`, written at each turn; `mode` (`normal`). A new file after `/clear` has none until the first turn. | mode |
+| `permission-mode`, `mode` | `permissionMode`, written at each turn; `mode` (`normal`). A new file after `/clear` has none until the first turn. Sessions driven through the SDK write neither: their prompt lines carry `permissionMode` instead. | mode; a change is an inline record |
 | `cost-state` | `totalCostUSD`, `modelUsage` per model, lines added/removed, durations. Written only at certain moments, such as `/clear` or moving to the background. | last known cost |
 | `pr-link` | `prNumber`, `prUrl`, `prRepository`. | node badge |
 | `frame-link` | An artifact the session published: `frameUrl`, `title`. | node badge |
@@ -158,7 +158,7 @@ Counts are from all 136 local transcripts (340,170 lines).
 | State | How | Reliability |
 |---|---|---|
 | Title | `custom-title`, else `ai-title`, else `last-prompt` | good |
-| Mode | latest `permission-mode` | per turn; unknown right after `/clear` |
+| Mode | latest `permission-mode`, or the latest prompt's `permissionMode` | per turn; unknown right after `/clear` |
 | Latest step | the last `tool_use` (tool + a short summary of its input) or the first line of the last `text` | good, but a tool waiting for approval isn't written yet |
 | Turn open | started and not yet closed by `turn_duration` or an interrupt | good |
 | Context used | the last `assistant` `usage`: `input_tokens + cache_creation_input_tokens + cache_read_input_tokens + output_tokens` | matched Claude Code's status line to within 1% on 8 sessions |
@@ -275,6 +275,8 @@ The inbox socket takes **one JSON line per message**. The format was captured by
 - **Memory:** RSS from `/proc/<pid>/statm`, summed over the tree. Normally 600–950 MB per session; one session that ran a game build held 7.2 GB.
 - **CPU:** the change in `utime + stime` (fields 14 and 15 of `/proc/<pid>/stat`) between two samples. The server will use `psutil` (7.0.0 is installed system-wide) for portability.
 - **GPU:** `nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits` takes 20 ms. Match each process ID against the session trees; the one GPU process found belonged to `valheim-35` (1.2 GB). `pynvml` isn't installed.
+- **As built (roadmap 4.1):** `psutil` walks each tree every 5 s (85 ms for 11 sessions and about 150 processes). A process's CPU time there includes `children_user` and `children_system`, the children it waited for, so processes that start and end between two samples still count: a gone process's time moves to its parent, minus what was already counted.
+- **Cost (roadmap 4.3):** each reply's `usage` (`input_tokens`, `cache_creation_input_tokens` split into `ephemeral_5m_input_tokens` and `ephemeral_1h_input_tokens`, `cache_read_input_tokens`, `output_tokens`, `server_tool_use.web_search_requests`) is repeated on every line of the reply: count it once per `message.id`. `cost-state` is per process (`startTime`, in ms) and written at `startTime + totalDuration`; its `modelUsage` gives tokens and `costUSD` per model. Over the same span the transcript held a median 93% of `cost-state`'s cost (87 sessions): Claude Code's side calls never reach it.
 
 ---
 

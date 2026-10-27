@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "gen:protocol": "uv run --project ../server constellation schema > src/protocol.schema.json && json2ts -i src/protocol.schema.json -o src/protocol.gen.ts --no-additionalProperties --bannerComment '/* Generated from the server protocol (constellation schema). Do not edit: run npm run gen:protocol. */'"
+    "gen:protocol": "uv run --project ../server constellation schema > src/protocol.schema.json && json2ts -i src/protocol.schema.json -o src/protocol.gen.ts --no-additionalProperties --bannerComment '/* Generated from the server protocol (constellation schema). Do not edit: run npm run gen:protocol. */'",
+    "test": "vitest run"
   },
   "dependencies": {
     "@xyflow/react": "^12.12.0",
@@ -22,6 +23,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "json-schema-to-typescript": "^16.0.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "vitest": "5.0.3"
   }
 }

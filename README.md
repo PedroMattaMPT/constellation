@@ -203,11 +203,13 @@ The Agent SDK, `claude agents --json` and hooks are documented interfaces. The t
 
 ## Running it
 
-Needs Linux, Claude Code, Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node 24+. The web app is the MVP of roadmap Phases 2 and 3:
+Needs Linux, Claude Code, Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node 24+. The web app covers roadmap Phases 2 to 5:
 
 - It shows every running session live: the map, the message tree, and each conversation.
 - It starts and drives sessions of its own: prompts and images, the `/` menu, model, effort and mode, questions and permission prompts, context, MCP servers, fork, rewind and resume.
 - It messages and adopts sessions you started in a terminal, and shows what they ask, read-only.
+- It shows what each session costs, in tokens and dollars and in CPU, memory and GPU, raises alerts past your limits, and can send desktop notifications when a session needs you (`:notify on`).
+- It works like tmux: `C-Space` then a key. Panes split, zoom and live in windows; `C-Space b` sends one prompt to several sessions, `C-Space f` finds in every conversation, and `C-Space ?` lists every key.
 
 - **Development:** `./dev` starts the server on 127.0.0.1:7337 and the web app with live reload on 127.0.0.1:7338. Open the link the server prints: the token in it is new on every start.
 - **Without the dev server:** build the web app once with `npm --prefix web run build`, then run `uv run --project server constellation serve` and open the link it prints.
@@ -215,6 +217,7 @@ Needs Linux, Claude Code, Python 3.12+ with [uv](https://docs.astral.sh/uv/), an
 - **Checks:**
   - server tests: `cd server && uv run pytest`
   - web types: `npm --prefix web run typecheck`
+  - web tests: `npm --prefix web test`
 - **After changing `server/src/constellation/protocol.py`:** run `npm --prefix web run gen:protocol` to regenerate the web app's types.
 
 | Folder | What |

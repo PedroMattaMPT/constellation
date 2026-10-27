@@ -1,12 +1,14 @@
 // The design system's picker pattern (round border, a list, an optional preview on the right) for model and effort,
 // mode, context, MCP servers, resume and rewind; plus the small dialogs around them. All open in the floating layer,
 // take their keys while open, and close on esc.
-import { ContextBar, KeyHints, ModeBadge, ModelPicker, ResumePicker, Spinner, glyph } from '@ds';
+import { AlertFlag, ContextBar, KeyHints, ModeBadge, ModelPicker, ResumePicker, Sparkline, Spinner, glyph } from '@ds';
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { api, reason } from './api';
+import { TOKEN, api, reason } from './api';
 import { MODE_NOTE, MODES } from './Dialogs';
-import { ago, shortModel } from './format';
-import type { ContextUsage, Effort, McpServer, Mode, PastSession, RewindPreview, SessionOptions, SessionPreview, Turn } from './protocol';
+import { ago, cost, count, gb, shortModel } from './format';
+import type {
+  ContextUsage, Effort, Limits, McpServer, Mode, PastSession, RewindPreview, SessionOptions, SessionPreview, Turn, UsageReport,
+} from './protocol';
 import { store, useStore } from './store';
 
 const close = () => store.set({ dialog: null });
@@ -335,6 +337,151 @@ export function ContextCard({ id }: { id: string }) {
   );
 }
 
+// ── Usage (/usage, :usage, or a click on the cost in the status line) ───────────
+
+const GB = 1024 ** 3;
+
+/**
+ * Design system: tokens per turn (`Sparkline`), the input / cache / output split and the cost; plus what the session's
+ * processes cost the machine over the last 30 minutes, against your limits (roadmap 4.4).
+ */
+export function UsageCard({ id }: { id: string }) {
+  const session = useStore((s) => s.sessions[id]);
+  const now = useStore((s) => s.now);
+  const [report, setReport] = useState<UsageReport | null>(null);
+  const [limits, setLimits] = useState<Limits | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const box = useAutofocus<HTMLDivElement>();
+
+  useEffect(() => {
+    api.usage(id).then(setReport, (failure: unknown) => setError(reason(failure)));
+  }, [id, session?.costUsd]);
+  useEffect(() => {
+    api.limits().then(setLimits, () => {});
+  }, []);
+
+  if (!session) return null;
+  const r = session.resources;
+  const perTurn = report?.turns.map((t) => t.input + t.cacheWrite + t.cacheRead + t.output) ?? [];
+  const models = Object.entries(report?.byModel ?? {}).filter(([, usd]) => usd > 0);
+  const memLimit = limits?.memoryGb ?? null;
+  const gpuLimit = limits?.gpuGb ?? null;
+  return (
+    <div
+      className="picker"
+      tabIndex={-1}
+      ref={box}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        close();
+      }}
+    >
+      <div className="cn-menu cn-picker usage" role="dialog" aria-label="usage">
+        <div className="cn-menu__head">
+          <b>usage</b>
+          <span className="cn-dim">{session.name}</span>
+          <span className="cn-fill" />
+          <span className="cn-dim">since it started {ago(session.startedAt, now)} ago</span>
+        </div>
+        <div className="picker__body">
+          {report ? (
+            <>
+              <div className="usage__row">
+                {perTurn.length ? (
+                  <Sparkline values={perTurn} label="tok" current={count(perTurn[perTurn.length - 1])} />
+                ) : (
+                  <span className="cn-dim">no replies yet</span>
+                )}
+                <span className="cn-dim">tokens per turn · the last {perTurn.length}</span>
+              </div>
+              <div className="usage__row">
+                <span className="cn-dim">input</span> {count(report.input)}
+                <span className="cn-dim">cache write</span> {count(report.cacheWrite)}
+                <span className="cn-dim">cache read</span> {count(report.cacheRead)}
+                <span className="cn-dim">output</span> {count(report.output)}
+              </div>
+              <div className="usage__row">
+                <b>{cost(report.costUsd) ?? '$0.00'}</b>
+                {models.length > 1
+                  ? models.map(([model, usd]) => (
+                      <span key={model}>
+                        <span className="cn-dim">{shortModel(model)}</span> {cost(usd)}
+                      </span>
+                    ))
+                  : null}
+              </div>
+              {report.estimated ? (
+                <div className="cn-dim">
+                  priced here from the transcript: Claude Code's own side calls, such as titles and compaction, aren't in it
+                </div>
+              ) : null}
+            </>
+          ) : error ? null : (
+            <span className="cn-dim">reading{glyph('misc', 'ellipsis')}</span>
+          )}
+          <div className="cn-label usage__section">the machine · last 30 minutes</div>
+          {r ? (
+            <>
+              <div className="usage__row">
+                <Sparkline
+                  values={r.cpuHistory.map(Math.round)}
+                  label="cpu"
+                  current={`${Math.round(r.cpu)}%`}
+                  warn={limits?.cpuPercent}
+                  max={Math.max(400, ...r.cpuHistory)}
+                />
+                <span className="cn-dim">{r.processes} processes</span>
+              </div>
+              <div className="usage__row">
+                <Sparkline
+                  values={r.memoryHistory.map((b) => b / GB)}
+                  label="mem"
+                  current={gb(r.memory)}
+                  warn={memLimit ? memLimit * 0.8 : undefined}
+                  crit={memLimit ?? undefined}
+                  max={Math.max(memLimit ?? 0, ...r.memoryHistory.map((b) => b / GB))}
+                />
+              </div>
+              {r.gpu != null ? (
+                <div className="usage__row">
+                  <Sparkline
+                    values={r.gpuHistory.map((b) => b / GB)}
+                    label="gpu"
+                    current={gb(r.gpu)}
+                    warn={gpuLimit ? gpuLimit * 0.8 : undefined}
+                    crit={gpuLimit ?? undefined}
+                    max={Math.max(gpuLimit ?? 0, ...r.gpuHistory.map((b) => b / GB))}
+                  />
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <span className="cn-dim">no sample yet</span>
+          )}
+          {session.alerts.length ? (
+            <div className="usage__row">
+              {session.alerts.map((alert) => (
+                <AlertFlag key={alert.kind} level={alert.level} label={alert.text} />
+              ))}
+            </div>
+          ) : null}
+          {limits ? (
+            <div className="cn-dim">
+              limits: memory {limits.memoryGb ?? '—'} GB · GPU {limits.gpuGb ?? '—'} GB · CPU {limits.cpuPercent}% for 5m ·
+              :limit changes them
+            </div>
+          ) : null}
+          <ErrorLine text={error} />
+        </div>
+        <div className="cn-menu__foot">
+          <KeyHints keys={[['esc', 'close']]} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** /clear on a session still waiting on questions: they go unanswered, so it asks first (design system). */
 export function ClearDialog({ id }: { id: string }) {
   const session = useStore((s) => s.sessions[id]);
@@ -550,7 +697,7 @@ export function ResumeDialog() {
     try {
       const { id } = await api.resume(current.sessionId, fork);
       close();
-      store.focus(id);
+      store.open(id); // design system: resume opens in a new pane
     } catch (failure) {
       setError(reason(failure));
       setBusy(false);
@@ -663,7 +810,7 @@ export function ResumeDialog() {
 // ── Rewind (esc esc in the prompt box, /rewind) ──────────────────────────
 
 /** Inside the project: relative to it. Outside: shortened in the middle (design system: truncation). */
-function shortPath(path: string, cwd: string): string {
+export function shortPath(path: string, cwd: string): string {
   const root = cwd.endsWith('/') ? cwd : `${cwd}/`;
   if (path.startsWith(root)) return path.slice(root.length);
   const parts = path.split('/');
@@ -960,6 +1107,41 @@ export function HooksDialog() {
         <button type="button" className={`cn-btn ${status?.installed ? '' : 'cn-btn--primary'}`} disabled={busy} onClick={() => void change(!status?.installed)}>
           {status?.installed ? 'Remove' : 'Install'} <span className="cn-btn__key">enter</span>
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── An image sent with a prompt (design system: sent images open in the web app) ─────────────
+
+export function ImageDialog({ id, entry, n }: { id: string; entry: string; n: number }) {
+  const session = useStore((s) => s.sessions[id]);
+  const [failed, setFailed] = useState(false);
+  const box = useAutofocus<HTMLDivElement>();
+  // An <img> can't send a header: the token goes in the query, as the API allows.
+  const src = `/api/sessions/${encodeURIComponent(id)}/entries/${encodeURIComponent(entry)}/images/${n}?token=${encodeURIComponent(TOKEN ?? '')}`;
+  return (
+    <div
+      className="cn-menu picker image-view"
+      role="dialog"
+      aria-label={`image ${n + 1}`}
+      tabIndex={-1}
+      ref={box}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        close();
+      }}
+    >
+      <div className="cn-menu__head">
+        <span className="cn-dim">{glyph('misc', 'image')}</span>
+        <b>image {n + 1}</b>
+        <span className="cn-dim">{session?.name}</span>
+        <span className="cn-fill" />
+        <KeyHints keys={[['esc', 'close']]} />
+      </div>
+      <div className="image-view__body">
+        {failed ? <ErrorLine text="not in the transcript any more" /> : <img src={src} alt={`image ${n + 1}`} onError={() => setFailed(true)} />}
       </div>
     </div>
   );

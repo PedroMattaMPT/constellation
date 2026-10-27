@@ -1,7 +1,8 @@
 import { ConfirmStop, KeyHints, ModeBadge, glyph } from '@ds';
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { api, reason } from './api';
-import type { Mode, ModelInfo } from './protocol';
+import type { FolderMatches, Mode, ModelInfo } from './protocol';
+import { middle } from './PromptMenus';
 import { store, useStore } from './store';
 
 // Claude Code's own aliases, until the server has the list a session reported (get_server_info).
@@ -118,9 +119,41 @@ export function Launcher() {
   const [mode, setMode] = useState<Mode | null>(null); // null: your own default mode
   const [confirm, setConfirm] = useState(''); // bypass: the folder's name, typed back
   const [prompt, setPrompt] = useState('');
+  const [openIn, setOpenIn] = useState<'pane' | 'window'>('pane');
   const [focus, setFocus] = useState('folder');
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [completion, setCompletion] = useState<FolderMatches | null>(null);
+  const [highlighted, setHighlighted] = useState(0);
+
+  // Folder completion (design system: SessionLauncher), and the error line when what's typed isn't a folder.
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () =>
+        api.folders(folder).then(
+          (found) => {
+            setCompletion(found);
+            setHighlighted(0);
+          },
+          () => setCompletion(null),
+        ),
+      120,
+    );
+    return () => window.clearTimeout(timer);
+  }, [folder]);
+  // Offer only what adds to the path: once it names a folder with no subfolders, nothing.
+  const matches = (completion?.matches ?? []).filter((m) => m !== (folder.endsWith('/') ? folder : `${folder}/`));
+  const folderField = useRef<HTMLInputElement>(null);
+  const complete = (to: string | undefined) => {
+    if (!to) return;
+    setFolder(to);
+    requestAnimationFrame(() => {
+      // the caret goes to the end, where the completion is, and the field scrolls to show it
+      const input = folderField.current;
+      input?.setSelectionRange(to.length, to.length);
+      if (input) input.scrollLeft = input.scrollWidth;
+    });
+  };
 
   // The short names of the models a running session reported, so the chips stay one line.
   useEffect(() => {
@@ -140,7 +173,8 @@ export function Launcher() {
   const finalName = (name ?? suggested).trim();
   const bypass = mode === 'bypassPermissions';
   const confirmed = !bypass || confirm === base(folder.trim());
-  const ready = folder.trim() !== '' && finalName !== '' && !starting && confirmed;
+  const notFolder = folder.trim() !== '' && completion?.folder === false;
+  const ready = folder.trim() !== '' && finalName !== '' && !starting && confirmed && !notFolder;
 
   const start = async () => {
     if (!ready) return;
@@ -157,7 +191,7 @@ export function Launcher() {
       rememberFolder(folder.trim());
       if (prompt.trim()) await api.prompt(id, prompt);
       store.set({ dialog: null });
-      store.focus(id);
+      store.open(id, openIn);
     } catch (failure) {
       setError(reason(failure, 'could not start'));
       setStarting(false);
@@ -182,7 +216,47 @@ export function Launcher() {
         <span className="cn-dim">managed {glyph('kind', 'managed')}</span>
       </div>
       <Field id="folder" label="folder" focus={focus} onFocus={setFocus}>
-        <input className="cn-input dialog-input" value={folder} onChange={(e) => setFolder(e.target.value)} autoFocus spellCheck={false} aria-label="folder" />
+        <input
+          ref={folderField}
+          className="cn-input dialog-input"
+          value={folder}
+          onChange={(e) => setFolder(e.target.value)}
+          onKeyDown={(event) => {
+            // tab completes while there's something to complete; otherwise it moves on, as everywhere
+            if (event.key === 'Tab' && !event.shiftKey && matches.length) complete(matches[highlighted]);
+            else if (event.key === 'ArrowDown' && matches.length) setHighlighted((h) => Math.min(matches.length - 1, h + 1));
+            else if (event.key === 'ArrowUp' && matches.length) setHighlighted((h) => Math.max(0, h - 1));
+            else return;
+            event.preventDefault();
+          }}
+          autoFocus
+          spellCheck={false}
+          aria-label="folder"
+          aria-autocomplete="list"
+        />
+        {focus === 'folder' && matches.length ? (
+          <div className="folder-matches" role="listbox" aria-label="folders">
+            {matches.slice(0, 6).map((match, i) => (
+              <div
+                key={match}
+                role="option"
+                aria-selected={i === highlighted}
+                className={`cn-menu__item picker__row${i === highlighted ? ' cn-menu__item--on' : ''}`}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => complete(match)}
+              >
+                <span className="cn-row__bar">{i === highlighted ? glyph('tree', 'cursor') : ' '}</span>
+                <span className="cn-ellipsis" title={match}>{middle(match, 70)}</span>
+              </div>
+            ))}
+            {matches.length > 6 ? <div className="cn-dim folder-matches__more">and {matches.length - 6} more</div> : null}
+          </div>
+        ) : null}
+        {notFolder && !matches.length ? (
+          <div className="cn-status--error">
+            {glyph('status', 'error')} not a folder
+          </div>
+        ) : null}
         {recent.length ? (
           <div className="cn-recent">
             {recent.map((path) => (
@@ -243,8 +317,11 @@ export function Launcher() {
           aria-label="first prompt"
         />
       </Field>
+      <Field id="open" label="open in" focus={focus} onFocus={setFocus}>
+        <Choice label="open in" options={['pane', 'window'] as const} value={openIn} onChange={setOpenIn} render={(where) => `new ${where}`} />
+      </Field>
       <div className="cn-dialog__foot">
-        <KeyHints keys={[['tab', 'next field'], ['←→', 'choose']]} />
+        <KeyHints keys={focus === 'folder' && matches.length ? [['tab', 'complete'], ['↑↓', 'folder']] : [['tab', 'next field'], ['←→', 'choose']]} />
         <span className="cn-fill" />
         <button type="button" className="cn-btn" onClick={() => store.set({ dialog: null })}>
           Cancel <span className="cn-btn__key">esc</span>

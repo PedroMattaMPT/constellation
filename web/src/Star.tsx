@@ -1,6 +1,6 @@
 // The star view of the map. Web only: the design system's map is a table in the terminal and cards on the web,
 // and these shapes, glows and the starfield can't be drawn in Textual (see ROADMAP.md, "Web only").
-import { ContextBar, KindMark, ModeBadge, SessionNode, Spinner, StatusBadge, glyph } from '@ds';
+import { AlertFlag, ContextBar, KindMark, ModeBadge, SessionNode, Spinner, StatusBadge, glyph } from '@ds';
 import {
   type Edge as FlowEdge,
   type EdgeProps,
@@ -76,6 +76,9 @@ export function sessionNodeProps({ session: s, n, subagents, focused, selected, 
     task: task(s),
     step: step(s),
     ctx: s.context?.percent ?? undefined,
+    // The resource row (design system: SessionNode): its CPU minutes and the most severe alert.
+    cpu: s.resources?.cpuHistory.length ? s.resources.cpuHistory.map(Math.round) : undefined,
+    alert: s.alerts[0] ? { level: s.alerts[0].level, label: s.alerts[0].kind } : undefined,
     subagents: subagents.map((a) => ({ name: a.description ?? a.type, status: a.status })),
     focused,
   };
@@ -147,6 +150,7 @@ export function StarNode({ data }: NodeProps<Node<NodeData, 'star'>>) {
             <div className="star__row">
               <ModeBadge mode={s.mode ?? 'default'} />
               {pct != null ? <ContextBar value={Math.round(pct)} max={s.context?.windowTokens ?? undefined} cells={6} /> : null}
+              {s.alerts[0] ? <AlertFlag level={s.alerts[0].level} label={s.alerts[0].kind} /> : null}
             </div>
             <div className={`star__row${s.status === 'error' ? ' cn-status--error' : ''}`}>
               {s.status === 'working' ? (
@@ -159,9 +163,13 @@ export function StarNode({ data }: NodeProps<Node<NodeData, 'star'>>) {
               <span className={`cn-ellipsis star__step star__step--${s.status}`} title={latest}>{latest}</span>
             </div>
             {summary ? (
-              <div className="star__row star__summary" title="model-written summary">
-                <span className="cn-dim">summary</span>
-                <span className="cn-ellipsis">{summary}</span>
+              // Its age, and dimmed once the session has moved on since (roadmap 5.4).
+              <div
+                className="star__row star__summary"
+                title={s.summarySource === 'claude' ? "Claude Code's own recap" : 'model-written summary'}
+              >
+                <span className="cn-dim">summary {ago(s.summaryAt, now)}</span>
+                <span className={`cn-ellipsis${(s.lastActivityAt ?? 0) > (s.summaryAt ?? 0) ? ' cn-dim' : ''}`}>{summary}</span>
               </div>
             ) : null}
           </>

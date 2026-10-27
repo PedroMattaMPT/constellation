@@ -137,3 +137,68 @@ def test_constellations_own_helper_sessions_stay_off_the_map(claude, me):
     collector = Collector(claude.root, waiting_for=no_waiting, ignore={"/run/constellation/summary"})
     collector.poll()
     assert collector.snapshot().sessions == []
+
+
+def test_an_image_sent_with_a_prompt_can_be_read_back(claude, me):
+    claude.register(me, "s1", "lab-a", cwd="/lab/a")
+    image = {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": "aGk="}}
+    prompt = {"type": "user", "uuid": "p1", "message": {"content": [image, {"type": "text", "text": "look"}]}}
+    claude.transcript("/lab/a", "s1").write_text(json.dumps(prompt) + "\n")
+    collector = Collector(claude.root, waiting_for=no_waiting)
+    collector.poll()
+    key = collector.snapshot().sessions[0].id
+    assert collector.page(key).entries[0].images == 1
+    assert collector.image(key, "p1", 0) == ("image/jpeg", b"hi")
+    assert collector.image(key, "p1", 1) is None and collector.image(key, "nope", 0) is None
+
+
+def test_search_finds_messages_in_every_running_session_newest_first(claude, me):
+    claude.register(me, "s1", "lab-a", status="idle")
+    path = claude.transcript("/lab/a", "s1")
+    prompt = lambda uuid, hour, text: {  # noqa: E731
+        "type": "user",
+        "uuid": uuid,
+        "timestamp": f"2026-10-26T{hour}:00:00Z",
+        "message": {"content": text},
+    }
+    lines = [
+        prompt("u1", 10, "Find the Session Store"),
+        prompt("u2", 11, "use the session store"),
+        prompt("u3", 12, "something else"),
+    ]
+    path.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    collector = Collector(claude.root, waiting_for=no_waiting)
+    collector.poll()
+    hits = collector.search("session STORE")
+    assert [h.entry.text for h in hits] == ["use the session store", "Find the Session Store"]
+    assert hits[0].session == f"{me}-{proc_start(me)}"
+    assert collector.search("  ") == []
+
+
+def test_a_summary_comes_free_while_nothing_has_happened_since(claude, me):
+    claude.register(me, "s1", "lab-a", status="idle")
+    path = claude.transcript("/lab/a", "s1")
+    at = "2026-10-26T10:00:00Z"
+    prompt = {"type": "user", "uuid": "u1", "timestamp": at, "message": {"content": "migrate the db"}}
+    recap = {
+        "type": "system",
+        "subtype": "away_summary",
+        "uuid": "r1",
+        "timestamp": "2026-10-26T10:05:00Z",
+        "content": "Migrations drafted; waiting on a schema review.",
+    }
+    path.write_text(json.dumps(prompt) + "\n" + json.dumps(recap) + "\n")
+    collector = Collector(claude.root, waiting_for=no_waiting)
+    collector.poll()
+    key = f"{me}-{proc_start(me)}"
+    recapped = ("Migrations drafted; waiting on a schema review.", 1793009100000, "claude")
+    assert collector.summary_for_free(key) == recapped
+
+    later = {"type": "user", "uuid": "u2", "timestamp": "2026-10-26T10:10:00Z", "message": {"content": "now the api"}}
+    with path.open("a") as fh:
+        fh.write(json.dumps(later) + "\n")
+    collector.poll()
+    assert collector.summary_for_free(key) is None  # it moved on since the recap: this one needs the model
+
+    collector.summaries[key] = ("Moving on to the API.", 1793009400000, "model")  # made at 10:10, as the prompt
+    assert collector.summary_for_free(key) == ("Moving on to the API.", 1793009400000, "model")

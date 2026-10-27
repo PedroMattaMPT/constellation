@@ -8,6 +8,7 @@ new one). The format is documented in docs/data-sources.md.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from collections import Counter
@@ -15,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..protocol import Entry, EntryContent
+from ..usage import Ledger, to_ms
 
 SKIP_PREFIX = b'{"type":"api-request'  # raw API logs: most of a transcript's bytes, never needed
 CHUNK = 8 << 20
@@ -85,6 +87,7 @@ class Item:
     agent_id: str | None = None
     parent: str | None = None  # prompts: the line they continue from, where a rewind to them resumes
     abandoned: bool = False
+    images: int = 0  # prompts: the images sent with it, which GET .../images/<n> returns
 
     def wire(self) -> Entry:
         return Entry(
@@ -105,6 +108,7 @@ class Item:
             agent_id=self.agent_id,
             session_id=self.session_id,
             abandoned=self.abandoned,
+            images=self.images,
         )
 
 
@@ -118,6 +122,7 @@ class Timeline:
     counts: Counter = field(default_factory=Counter)
     turn_sizes: Counter = field(default_factory=Counter)
     abandoned: set[int] = field(default_factory=set)  # turns on a branch a rewind left
+    ledger: Ledger = field(default_factory=Ledger)  # what its replies used and cost (roadmap 4.3)
 
     def abandon(self, first_turn: int, changed: dict[str, Item]) -> None:
         """Marks every turn from `first_turn` to the latest as left behind by a rewind."""
@@ -181,6 +186,7 @@ class Transcript:
         self.branch: str | None = None
         self.step: str | None = None
         self.away_summary: str | None = None
+        self.away_summary_at: int | None = None  # unix ms
         self.cost_usd: float | None = None
         self.usage: dict | None = None
         self.model: str | None = None
@@ -199,6 +205,7 @@ class Transcript:
         self._prompt_after: dict[str, Item] = {}
         self._first_prompt: Item | None = None
         self._compacted: Item | None = None  # the latest record of a /compact you ran
+        self._headers: dict[str, dict] = {}  # open questions: question text -> header
 
     @property
     def exists(self) -> bool:
@@ -252,7 +259,7 @@ class Transcript:
         if kind == "user":
             self._user(e, offset, add, tl, changed)
         elif kind == "assistant":
-            self._assistant(e, add)
+            self._assistant(e, add, tl)
         elif kind == "system":
             self._system(e, add, tl, changed)
         elif kind == "custom-title":
@@ -262,15 +269,27 @@ class Transcript:
         elif kind == "last-prompt":
             self.last_prompt = e.get("lastPrompt")
         elif kind == "permission-mode":
-            self.permission_mode = e.get("permissionMode")
+            self._mode(e.get("permissionMode"), add)
         elif kind == "cost-state":
             self.cost_usd = e.get("totalCostUSD")
+            start = e.get("startTime")
+            written = start + (e.get("totalDuration") or 0) if isinstance(start, int) else None
+            tl.ledger.cost_state(start if isinstance(start, int) else None, written, self.cost_usd)
         elif kind == "pr-link" and e.get("prUrl") and e["prUrl"] not in self.pr_links:
             self.pr_links.append(e["prUrl"])
         elif kind == "frame-link" and e.get("frameUrl") and e["frameUrl"] not in self.artifacts:
             self.artifacts.append(e["frameUrl"])
 
+    def _mode(self, mode: str | None, add, block: int = 0) -> None:
+        """A change of mode is the design system's inline record; the first mode is just the start."""
+        if mode and self.permission_mode and mode != self.permission_mode:
+            add("mode", mode, block=block)
+        self.permission_mode = mode or self.permission_mode
+
     def _user(self, e: dict, offset: int, add, tl: Timeline, changed: dict[str, Item]) -> None:
+        # Terminal sessions write a permission-mode line each turn; SDK sessions only mark the prompt itself, whose
+        # line then holds two rows: the record takes block -1, as no content block has that index.
+        self._mode(e.get("permissionMode"), add, block=-1)
         origin = e.get("origin") or {}
         source = origin.get("kind")
         content = (e.get("message") or {}).get("content")
@@ -347,7 +366,7 @@ class Transcript:
                     add("notice", text)
             elif content.startswith(INTERRUPTED):
                 self.turn_open = False
-                add("interrupt", "interrupted")
+                add("interrupt", "interrupted by you")
             elif not e.get("isMeta") and not content.startswith(SKIPPED_TEXT) and source in (None, "human"):
                 self._prompt(first_line(content), add, e, tl, changed)
             return
@@ -366,19 +385,16 @@ class Transcript:
                 text = block.get("text", "")
                 if text.startswith(INTERRUPTED):
                     self.turn_open = False
-                    add("interrupt", "interrupted")
+                    add("interrupt", "interrupted by you")
                 elif not e.get("isMeta"):
                     texts.append(text)
             elif block.get("type") == "image":
                 images += 1
         if (texts or images) and source in (None, "human"):
             text = first_line("\n".join(texts)) or "(image)"
-            detail = f"+ {images} image{'s' if images > 1 else ''}" if images else None
-            self._prompt(text, add, e, tl, changed, detail=detail)
+            self._prompt(text, add, e, tl, changed, images=images)
 
-    def _prompt(
-        self, text: str, add, e: dict, tl: Timeline, changed: dict[str, Item], detail: str | None = None
-    ) -> None:
+    def _prompt(self, text: str, add, e: dict, tl: Timeline, changed: dict[str, Item], images: int = 0) -> None:
         if not text:
             return
         parent = e.get("parentUuid")
@@ -388,7 +404,7 @@ class Transcript:
             if self._first_prompt is not None and self._first_prompt.abandoned:
                 self.first_prompt = self._first_prompt = None
         self.turn_open = True
-        item = add("prompt", text, starter=True, detail=detail, parent=parent)
+        item = add("prompt", text, starter=True, parent=parent, images=images)
         if parent:
             self._prompt_after[parent] = item
         if self._first_prompt is None:
@@ -409,7 +425,11 @@ class Transcript:
         if call.kind == "question" and not error:
             raw_answers = result.get("answers")
             answers = raw_answers if isinstance(raw_answers, dict) else {}
-            shown = "; ".join(", ".join(v) if isinstance(v, list) else str(v) for v in answers.values())
+            # The design system's answered record: `Session store: Redis · Rollout: dev, staging`.
+            headers = self._headers.pop(call.tool_use_id or "", {})
+            shown = " · ".join(
+                f"{headers.get(q, q)}: {', '.join(v) if isinstance(v, list) else v}" for q, v in answers.items()
+            )
             add("answer", shown or first_line(text), tool_use_id=call.tool_use_id)
         elif error and text.startswith(DENIED):
             add("denied", f"{call.tool or 'tool'} denied", detail=first_line(text, 120), tool_use_id=call.tool_use_id)
@@ -431,10 +451,12 @@ class Transcript:
                 },
             )
 
-    def _assistant(self, e: dict, add) -> None:
+    def _assistant(self, e: dict, add, tl: Timeline) -> None:
         message = e.get("message") or {}
         if message.get("usage") and str(message.get("model", "")).startswith("claude"):
             self.usage, self.model = message["usage"], message["model"]
+            if message.get("id"):
+                tl.ledger.reply(message["id"], to_ms(e.get("timestamp")), tl.turn, message["model"], message["usage"])
         for i, block in enumerate(message.get("content") or []):
             if not isinstance(block, dict):
                 continue
@@ -451,6 +473,10 @@ class Transcript:
         name, args = block.get("name") or "tool", block.get("input") or {}
         common = {"block": index, "tool": name, "tool_use_id": block.get("id")}
         if name == "AskUserQuestion":
+            if block.get("id"):  # the answer's record names each question by its header
+                self._headers[block["id"]] = {
+                    q.get("question"): q.get("header") for q in args.get("questions") or [] if isinstance(q, dict)
+                }
             questions = args.get("questions") or [{}]
             options = " / ".join(o.get("label", "") for o in questions[0].get("options") or [] if isinstance(o, dict))
             item = add(
@@ -501,6 +527,7 @@ class Transcript:
             self._compacted = None if trigger else item
         elif subtype == "away_summary":
             self.away_summary = first_line(content, 300)
+            self.away_summary_at = to_ms(e.get("timestamp"))
             add("notice", first_line(content))
         elif subtype == "local_command":
             command = COMMAND.search(content)
@@ -525,6 +552,21 @@ class Transcript:
         with self.path.open("rb") as fh:
             fh.seek(offset)
             return json.loads(fh.readline())
+
+    def image(self, item: Item, n: int) -> tuple[str, bytes] | None:
+        """The n-th image sent with a prompt: its media type and bytes."""
+        try:
+            blocks = (self.line_at(item.offset).get("message") or {}).get("content") or []
+        except (OSError, ValueError):
+            return None
+        images = [b for b in blocks if isinstance(b, dict) and b.get("type") == "image"]
+        source = images[n].get("source") or {} if n < len(images) else {}
+        if source.get("type") != "base64" or not isinstance(source.get("data"), str):
+            return None
+        try:
+            return source.get("media_type") or "image/png", base64.b64decode(source["data"])
+        except ValueError:
+            return None
 
     def call_input(self, item: Item) -> dict:
         """A tool call's input as written, whole (content() cuts it for display). {} when it can't be read."""

@@ -4,7 +4,7 @@
  * Root for schema export: every type a client needs.
  */
 export interface Protocol {
-  event: SnapshotEvent | SessionEvent | SessionRemovedEvent | EntriesEvent | GraphEvent;
+  event: SnapshotEvent | SessionEvent | SessionRemovedEvent | EntriesEvent | GraphEvent | NoticeEvent | TotalsEvent;
   entryPage: EntryPage;
   entryContent: EntryContent;
   turns: Turn[];
@@ -31,6 +31,13 @@ export interface Protocol {
   rewindRequest: RewindRequest;
   messageRequest: MessageRequest;
   hookStatus: HookStatus;
+  folderMatches: FolderMatches;
+  fileMatches: FileMatches;
+  pastPrompts: PastPrompt[];
+  limits: Limits;
+  limitsRequest: LimitsRequest;
+  usageReport: UsageReport;
+  searchHits: SearchHit[];
 }
 export interface SnapshotEvent {
   type: "snapshot";
@@ -43,6 +50,7 @@ export interface Snapshot {
   edges: Edge[];
   endpoints: Endpoint[];
   subagents: Subagent[];
+  totals: Totals;
 }
 /**
  * One running Claude Code process. Its id stays the same across /clear; `session_id` changes.
@@ -120,6 +128,10 @@ export interface Session {
   summary: string | null;
   summaryAt: number | null;
   /**
+   * model: a small model wrote it. claude: Claude Code's own recap, current, so no call.
+   */
+  summarySource: ("model" | "claude") | null;
+  /**
    * It has an inbox socket Constellation can send a peer message to.
    */
   inbox: boolean;
@@ -152,6 +164,30 @@ export interface Session {
    */
   effort: string | null;
   mcp: McpSummary | null;
+  /**
+   * Background tasks still running (managed).
+   */
+  tasks: TaskInfo[];
+  /**
+   * Forked here from that session.
+   */
+  forkOf: ForkLink | null;
+  /**
+   * Sessions forked here from this one.
+   */
+  forks: ForkLink[];
+  /**
+   * Part of cost_usd is priced here from the transcript: Claude Code hasn't recorded it yet.
+   */
+  costEstimated: boolean;
+  /**
+   * None until the first sample, or when the process is gone.
+   */
+  resources: Resources | null;
+  /**
+   * The thresholds it has crossed, most severe first.
+   */
+  alerts: Alert[];
 }
 export interface Context {
   model: string;
@@ -190,6 +226,72 @@ export interface McpSummary {
   failed: number;
   total: number;
 }
+/**
+ * A background task of a managed session (a background command, a background subagent).
+ */
+export interface TaskInfo {
+  id: string;
+  description: string;
+  type: string | null;
+}
+/**
+ * One end of a fork: the session it came from, or one made from it.
+ */
+export interface ForkLink {
+  /**
+   * Node id, while that session runs.
+   */
+  session: string | null;
+  name: string;
+  /**
+   * Unix ms: where the record goes in the conversation.
+   */
+  at: number;
+}
+/**
+ * What a session's process tree costs the machine (roadmap 4.1, 4.2), sampled every few seconds.
+ */
+export interface Resources {
+  /**
+   * Percent of one core, now: 200 is two cores busy.
+   */
+  cpu: number;
+  /**
+   * Resident memory of the process tree, bytes.
+   */
+  memory: number;
+  /**
+   * GPU memory of the process tree, bytes. None without nvidia-smi.
+   */
+  gpu: number | null;
+  /**
+   * Processes in the tree: claude, its shells, MCP servers, dev servers.
+   */
+  processes: number;
+  /**
+   * One value per minute, oldest first, up to 30: its average.
+   */
+  cpuHistory: number[];
+  /**
+   * One value per minute, oldest first, up to 30: its peak.
+   */
+  memoryHistory: number[];
+  /**
+   * As memory_history, for GPU memory. Empty without a GPU.
+   */
+  gpuHistory: number[];
+}
+/**
+ * A threshold crossed (design system): context, runaway CPU, or memory or GPU against your limits.
+ */
+export interface Alert {
+  kind: "ctx" | "cpu" | "mem" | "gpu";
+  level: "warning" | "critical";
+  /**
+   * What crossed, in the design system's words: 'GPU 21.4/20 GB', 'context 97%'.
+   */
+  text: string;
+}
 export interface Edge {
   id: string;
   /**
@@ -222,6 +324,15 @@ export interface Subagent {
   at: string | null;
   depth: number | null;
   background: boolean;
+}
+/**
+ * Across the machine, for the status bar.
+ */
+export interface Totals {
+  /**
+   * Today's cost, from every transcript written to today. An estimate: Claude Code's side calls (titles, compaction) never reach a transcript.
+   */
+  todayUsd: number | null;
 }
 export interface SessionEvent {
   type: "session";
@@ -272,7 +383,8 @@ export interface Entry {
     | "thinking"
     | "interrupt"
     | "compact"
-    | "notice";
+    | "notice"
+    | "mode";
   at: string | null;
   /**
    * First line: the prompt, tool name, peer name or reply text.
@@ -300,12 +412,28 @@ export interface Entry {
    * On a branch a rewind left: not part of the conversation any more.
    */
   abandoned: boolean;
+  /**
+   * Prompts: the images sent with it (GET .../entries/{id}/images/{n}).
+   */
+  images: number;
 }
 export interface GraphEvent {
   type: "graph";
   edges: Edge[];
   endpoints: Endpoint[];
   subagents: Subagent[];
+}
+/**
+ * Something the server did on its own went wrong (adopting a session): shown until dismissed.
+ */
+export interface NoticeEvent {
+  type: "notice";
+  text: string;
+  at: number;
+}
+export interface TotalsEvent {
+  type: "totals";
+  totals: Totals;
 }
 export interface EntryPage {
   entries: Entry[];
@@ -774,4 +902,111 @@ export interface HookStatus {
    * The hook script.
    */
   script: string;
+}
+/**
+ * Folder completion for the launcher.
+ */
+export interface FolderMatches {
+  /**
+   * What was typed is a folder.
+   */
+  folder: boolean;
+  /**
+   * Folders that complete it, ending in /.
+   */
+  matches: string[];
+  total: number;
+}
+/**
+ * `@` mentions: the project's files and folders that match, best first.
+ */
+export interface FileMatches {
+  matches: FileMatch[];
+  total: number;
+}
+export interface FileMatch {
+  /**
+   * Relative to the session's folder; folders end in /.
+   */
+  path: string;
+  folder: boolean;
+}
+/**
+ * A prompt from your history in that folder (~/.claude/history.jsonl), for C-r.
+ */
+export interface PastPrompt {
+  text: string;
+  /**
+   * Unix ms.
+   */
+  at: number;
+}
+/**
+ * What a session may use before it's an alert (roadmap 4.5): 80% of a limit is a warning, past it critical.
+ */
+export interface Limits {
+  /**
+   * Per session. Default: a quarter of this machine's memory.
+   */
+  memoryGb: number | null;
+  /**
+   * Per session. Default: the GPU's memory. None without a GPU.
+   */
+  gpuGb: number | null;
+  /**
+   * Busy above this for 5 minutes is runaway CPU (a warning).
+   */
+  cpuPercent: number;
+}
+/**
+ * Change some limits; a field left out stays. `reset` puts every limit back to its default.
+ */
+export interface LimitsRequest {
+  memoryGb: number | null;
+  gpuGb: number | null;
+  cpuPercent: number | null;
+  reset: boolean;
+}
+/**
+ * GET /api/sessions/{id}/usage: tokens per turn and this process's split and cost (design system: /usage).
+ */
+export interface UsageReport {
+  /**
+   * The last 30 turns, oldest first, subagents included.
+   */
+  turns: UsageTurn[];
+  /**
+   * Unix ms: the process's start, which the totals below count from.
+   */
+  since: number;
+  input: number;
+  cacheWrite: number;
+  cacheRead: number;
+  output: number;
+  /**
+   * As on the session: Claude Code's own figure where it has one.
+   */
+  costUsd: number | null;
+  estimated: boolean;
+  /**
+   * Cost since the start per model, priced here.
+   */
+  byModel: {
+    [k: string]: number;
+  };
+}
+export interface UsageTurn {
+  turn: number;
+  input: number;
+  cacheWrite: number;
+  cacheRead: number;
+  output: number;
+  costUsd: number;
+}
+/**
+ * GET /api/search: one message that matches, in the session it's in.
+ */
+export interface SearchHit {
+  session: string;
+  entry: Entry;
 }

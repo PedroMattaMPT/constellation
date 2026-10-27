@@ -37,8 +37,12 @@ from claude_agent_sdk import (
     PermissionUpdate,
     ResultMessage,
     SystemMessage,
+    TaskNotificationMessage,
+    TaskStartedMessage,
+    TaskUpdatedMessage,
     ToolPermissionContext,
 )
+from claude_agent_sdk.types import TERMINAL_TASK_STATUSES
 
 from .claude import files
 
@@ -92,6 +96,7 @@ class Client(Protocol):
     async def reconnect_mcp_server(self, server_name: str) -> None: ...
     async def toggle_mcp_server(self, server_name: str, enabled: bool) -> None: ...
     async def rewind_files(self, user_message_id: str) -> None: ...
+    async def stop_task(self, task_id: str) -> None: ...
 
 
 ClientFactory = Callable[[ClaudeAgentOptions], Client]
@@ -154,11 +159,22 @@ class Managed:
     mcp: list[dict[str, Any]] | None = None  # the last get_mcp_status
     compact_at: float | None = None  # where auto-compact fires, as a share of the window
     replaces: str | None = None  # the node this one took over from: adopted, or restarted to rewind
+    tasks: dict[str, dict[str, Any]] = field(default_factory=dict)  # background tasks running, by task id
     pending: dict[str, Pending] = field(default_factory=dict)
     # Notes for tool calls you allowed with changes, by tool_use_id: the PostToolUse hook tells the session.
     edits: dict[str, str] = field(default_factory=dict)
     reader: asyncio.Task | None = None
     sending: bool = False
+
+
+@dataclass
+class Fork:
+    """A session forked from another, for the record in both conversations."""
+
+    parent: str | None  # node id, if the parent ran here
+    parent_name: str
+    child: str
+    at: int
 
 
 @dataclass
@@ -181,6 +197,8 @@ class Manager:
         self.adopting: dict[str, Adoption] = {}  # by the external session's node id
         self.windows: dict[str, int] = {}  # context window per model, learned from get_context_usage
         self.models: list[dict[str, Any]] = []  # the latest model list any session reported, for the launcher
+        self.forks: list[Fork] = []
+        self.notify: Callable[[str], None] = lambda text: log.warning("%s", text)  # the app shows these
         self._ids = itertools.count(1)
         self._tasks: set[asyncio.Task] = set()
 
@@ -272,14 +290,19 @@ class Manager:
         for key in list(self.sessions):
             await self.stop(key)
 
-    async def fork(self, key: str, name: str | None = None) -> Managed:
+    async def fork(self, key: str, name: str | None = None, parent_name: str | None = None) -> Managed:
         """A new session that starts with this one's conversation (fork_session), in a new pane."""
         managed = self._get(key)
         if not managed.session_id:
             raise ManagerError("nothing to fork yet: send a prompt first")
-        return await self.start(
+        child = await self.start(
             managed.cwd, managed.model, name=name, resume=managed.session_id, fork=True, effort=managed.effort
         )
+        self.record_fork(key, parent_name or managed.name or "session", child.id)
+        return child
+
+    def record_fork(self, parent: str | None, parent_name: str, child: str) -> None:
+        self.forks.append(Fork(parent=parent, parent_name=parent_name, child=child, at=int(time.time() * 1000)))
 
     async def rewind(
         self, key: str, prompt: str, parent: str | None, *, files_too: bool, conversation: bool
@@ -332,7 +355,10 @@ class Manager:
         try:
             await self.start(adoption.cwd, name=adoption.name, resume=adoption.session_id, replaces=key)
         except ManagerError as error:  # its terminal copy is gone already; `claude --resume <id>` still works
-            log.warning("adopting %s failed: %s", adoption.session_id, error)
+            self.notify(
+                f"{adoption.name or adoption.session_id[:8]} wasn't adopted: {error}. "
+                f"Its terminal copy has exited; claude --resume {adoption.session_id} brings it back."
+            )
         finally:
             self.adopting.pop(key, None)
 
@@ -395,6 +421,17 @@ class Manager:
         if usage.get("isAutoCompactEnabled") and usage.get("autoCompactThreshold") and usage.get("rawMaxTokens"):
             managed.compact_at = usage["autoCompactThreshold"] / usage["rawMaxTokens"]
         return usage
+
+    async def stop_task(self, key: str, task_id: str) -> None:
+        """Stops one background task (stop_task()); the session reports its end in the stream."""
+        managed = self._get(key)
+        assert managed.client is not None
+        if task_id not in managed.tasks:
+            raise ManagerError("no such background task, or it has ended")
+        try:
+            await managed.client.stop_task(task_id)
+        except Exception as error:  # noqa: BLE001 - say why
+            raise ManagerError(f"not stopped: {error}") from error
 
     async def mcp(self, key: str) -> list[dict[str, Any]]:
         managed = self._get(key)
@@ -537,6 +574,15 @@ class Manager:
             self._release(managed, "the session ended")
 
     def _on_message(self, managed: Managed, message: Any) -> None:
+        # Background tasks: started, then ended by a terminal status from either of two messages (SDK docs).
+        if isinstance(message, TaskStartedMessage):
+            managed.tasks[message.task_id] = {"description": message.description, "type": message.task_type}
+            return
+        if isinstance(message, TaskNotificationMessage) or (
+            isinstance(message, TaskUpdatedMessage) and message.patch.get("status") in TERMINAL_TASK_STATUSES
+        ):
+            managed.tasks.pop(message.task_id, None)
+            return
         if isinstance(message, SystemMessage):
             data = message.data
             if message.subtype == "init":

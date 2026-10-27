@@ -10,6 +10,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStore as useFlowStore,
 } from '@xyflow/react';
 import { KindMark, MessageEdge, ProjectGroup, SessionNode, glyph } from '@ds';
 import { type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
@@ -170,7 +171,7 @@ function MessageEdgeView({ id, sourceX, sourceY, targetX, targetY, data, selecte
 const nodeTypes = { session: SessionNodeView, star: StarNode, project: ProjectView, endpoint: EndpointView, endpointStar: EndpointStar };
 const edgeTypes = { message: MessageEdgeView, figure: FigureEdge };
 
-interface Box {
+export interface Box {
   x: number;
   y: number;
   w: number;
@@ -194,7 +195,12 @@ interface Layout {
   right: number;
 }
 
-type Place = (groups: Group[], data: (n: number, session: Session) => NodeData, compact: boolean) => Layout;
+type Place = (
+  groups: Group[],
+  data: (n: number, session: Session) => NodeData,
+  compact: boolean,
+  heights: Map<string, number>,
+) => Layout;
 
 const projectNode = (id: string, group: Group, x: number, y: number, width: number, height: number): MapNode => ({
   id,
@@ -213,7 +219,7 @@ const projectNode = (id: string, group: Group, x: number, y: number, width: numb
 });
 
 /** Design-system cards: project frames in rows, waiting sessions first. */
-const placeCards: Place = (groups, data, compact) => {
+const placeCards: Place = (groups, data, compact, heights) => {
   const ordered = [...groups].sort((a, b) => {
     const waiting = (g: Group) => g.filter((x) => x.session.status === 'waiting').length;
     return waiting(b) - waiting(a) || b.length - a.length || a[0].session.project.localeCompare(b[0].session.project);
@@ -224,6 +230,7 @@ const placeCards: Place = (groups, data, compact) => {
   let x = 0;
   let y = 0;
   let rowHeight = 0;
+  let right = 0; // the widest row's end: peers that aren't sessions go past it
   ordered.forEach((group, i) => {
     if (i > 0 && i % GROUPS_PER_ROW === 0) {
       x = 0;
@@ -235,7 +242,7 @@ const placeCards: Place = (groups, data, compact) => {
     let inner = GROUP_PAD.top;
     const children: MapNode[] = sorted.map(({ n, session }) => {
       const d = data(n, session);
-      const h = nodeHeight(d);
+      const h = heights.get(session.id) ?? nodeHeight(d); // measured once drawn; estimated until then
       boxes.set(session.id, { x: x + GROUP_PAD.side, y: y + inner, w: NODE_W, h });
       const node: MapNode = {
         id: session.id,
@@ -254,9 +261,10 @@ const placeCards: Place = (groups, data, compact) => {
     const height = inner - gap + GROUP_PAD.bottom;
     nodes.push(projectNode(groupId, group, x, y, width, height), ...children);
     x += width + GROUP_GAP;
+    right = Math.max(right, x);
     rowHeight = Math.max(rowHeight, height);
   });
-  return { nodes, figures: [], boxes, radius: new Map(), right: x };
+  return { nodes, figures: [], boxes, radius: new Map(), right };
 };
 
 /**
@@ -273,6 +281,7 @@ const placeStars: Place = (groups, data, compact) => {
   let x = 0;
   let y = 0;
   let rowHeight = 0;
+  let right = 0; // the widest row's end: peers that aren't sessions go past it
   ordered.forEach((group, i) => {
     const column = i % GROUPS_PER_ROW;
     if (i > 0 && column === 0) {
@@ -314,9 +323,10 @@ const placeStars: Place = (groups, data, compact) => {
     const height = STAR_PAD.top + (group.length - 1) * stepY + STAR_NODE.h + STAR_PAD.bottom;
     nodes.push(projectNode(groupId, group, x, top, STAR_GROUP_W, height), ...children);
     x += STAR_GROUP_W + GROUP_GAP;
+    right = Math.max(right, x);
     rowHeight = Math.max(rowHeight, COLUMN_DRIFT[column] + height);
   });
-  return { nodes, figures, boxes, radius, right: x };
+  return { nodes, figures, boxes, radius, right };
 };
 
 /** Edges whose count just went up run their dashes (design system: a message in flight). */
@@ -356,7 +366,22 @@ interface Marks {
   summarizing: Set<string>;
 }
 
+/**
+ * The cards' drawn heights, as React Flow measured them, so the layout stacks real sizes instead of estimates.
+ * A string compares by value: the layout redoes only when a height changes.
+ */
+function useHeights(): Map<string, number> {
+  const key = useFlowStore((state) =>
+    [...state.nodeLookup.values()]
+      .filter((node) => node.type === 'session' && node.measured?.height)
+      .map((node) => `${node.id}=${Math.round(node.measured!.height!)}`)
+      .join(' '),
+  );
+  return useMemo(() => new Map(key ? key.split(' ').map((pair) => [pair.split('=')[0], Number(pair.split('=')[1])]) : []), [key]);
+}
+
 function useGraph(view: View, compact: boolean, marks: Marks): Graph {
+  const heights = useHeights();
   const sessions = useStore((s) => s.sessions);
   const edges = useStore((s) => s.edges);
   const endpoints = useStore((s) => s.endpoints);
@@ -387,7 +412,7 @@ function useGraph(view: View, compact: boolean, marks: Marks): Graph {
     const groups = new Map<string, Group>();
     for (const item of numbered(sessions)) groups.set(item.session.cwd, [...(groups.get(item.session.cwd) ?? []), item]);
     const stars = view === 'stars';
-    const { nodes, figures, boxes, radius, right } = (stars ? placeStars : placeCards)([...groups.values()], data, compact);
+    const { nodes, figures, boxes, radius, right } = (stars ? placeStars : placeCards)([...groups.values()], data, compact, heights);
 
     // Peers that aren't running sessions sit in their own column, to the right.
     const used = new Set(edges.flatMap((e) => [e.source, e.target]));
@@ -421,7 +446,7 @@ function useGraph(view: View, compact: boolean, marks: Marks): Graph {
           : { ...handles(boxes.get(e.source)!, boxes.get(e.target)!), data: { count: e.count, live: live.has(e.id) } }),
       }));
     return { nodes, edges: [...figures, ...messages], boxes };
-  }, [sessions, edges, endpoints, subagents, selected, now, view, compact, marks.cursor, marks.edge, marks.summarizing, live]);
+  }, [sessions, edges, endpoints, subagents, selected, now, view, compact, marks.cursor, marks.edge, marks.summarizing, live, heights]);
 }
 
 const DIRECTION: Record<string, [number, number]> = {
@@ -436,7 +461,7 @@ const DIRECTION: Record<string, [number, number]> = {
 };
 
 /** The nearest box from `from` in a direction: mostly along it, a little across it. */
-function nearest(boxes: Map<string, Box>, ids: string[], from: string, [dx, dy]: [number, number], stars: boolean): string | null {
+export function nearest(boxes: Map<string, Box>, ids: string[], from: string, [dx, dy]: [number, number], stars: boolean): string | null {
   const a = boxes.get(from);
   if (!a) return null;
   const center = (b: Box) => ({ x: b.x + (stars ? STAR.x : b.w / 2), y: b.y + (stars ? STAR.y : b.h / 2) });
@@ -499,7 +524,9 @@ function MapKeys({ view, compact, active, note, onFit, onView, onCompact }: {
 
 function Flow() {
   const [view, setView] = useState<View>(() => (load(VIEW_KEY, 'cards') ? 'cards' : 'stars'));
-  const [compact, setCompact] = useState(() => load(COMPACT_KEY, 'on'));
+  const [chosen, setCompact] = useState(() => load(COMPACT_KEY, 'on'));
+  const narrow = useStore((s) => s.screen !== 'wide'); // below 1280 px the map shows compact nodes (design system)
+  const compact = chosen || narrow;
   const focused = useStore((s) => s.focused);
   const sessions = useStore((s) => s.sessions);
   const mapFocus = useStore((s) => s.mapFocus);

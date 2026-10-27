@@ -1,7 +1,7 @@
 import type {
-  AnswerRequest, ContextUsage, Effort, EntryContent, EntryPage, Event, HookStatus, ImageInput, LinkMessage, McpServer,
-  Mode, ModelInfo, PastSession, Queued, RewindPreview, RewindRequest, SessionOptions, SessionPreview, StartRequest,
-  Started, Turn,
+  AnswerRequest, ContextUsage, Effort, EntryContent, EntryPage, Event, FileMatches, FolderMatches, HookStatus, ImageInput,
+  Limits, LimitsRequest, LinkMessage, McpServer, Mode, ModelInfo, PastPrompt, PastSession, Queued, RewindPreview,
+  RewindRequest, SearchHit, SessionOptions, SessionPreview, StartRequest, Started, Turn, UsageReport,
 } from './protocol';
 
 const TOKEN_KEY = 'constellation.token';
@@ -98,7 +98,11 @@ export const api = {
   setEffort: (id: string, effort: Effort) => send<Queued>('POST', `${session(id)}/effort`, { effort }),
   setMode: (id: string, mode: Mode, confirm: string | null = null) => send('POST', `${session(id)}/mode`, { mode, confirm }),
   context: (id: string) => get<ContextUsage>(`${session(id)}/context`),
+  usage: (id: string) => get<UsageReport>(`${session(id)}/usage`),
+  limits: () => get<Limits>('/api/limits'),
+  setLimits: (request: Partial<LimitsRequest>) => send<Limits>('POST', '/api/limits', request),
   mcp: (id: string) => get<McpServer[]>(`${session(id)}/mcp`),
+  stopTask: (id: string, task: string) => send('POST', `${session(id)}/tasks/${encodeURIComponent(task)}/stop`),
   mcpReconnect: (id: string, server: string) => send<McpServer[]>('POST', `${session(id)}/mcp/${encodeURIComponent(server)}/reconnect`),
   mcpToggle: (id: string, server: string, enabled: boolean) =>
     send<McpServer[]>('POST', `${session(id)}/mcp/${encodeURIComponent(server)}/toggle`, { enabled }),
@@ -118,9 +122,14 @@ export const api = {
   hooks: () => get<HookStatus>('/api/hooks'),
   installHooks: () => send<HookStatus>('POST', '/api/hooks'),
   removeHooks: () => send<HookStatus>('DELETE', '/api/hooks'),
+  // Paths and history for the prompt box and the launcher
+  folders: (path: string) => get<FolderMatches>(`/api/folders?${query({ path })}`),
+  files: (id: string, search: string) => get<FileMatches>(`${session(id)}/files?${query({ query: search })}`),
+  prompts: (cwd: string, search = '') => get<PastPrompt[]>(`/api/prompts?${query({ cwd, query: search })}`),
   // Map
   summary: (id: string) => send('POST', `${session(id)}/summary`),
   links: (source: string, target: string) => get<LinkMessage[]>(`/api/links?${query({ source, target })}`),
+  search: (search: string) => get<SearchHit[]>(`/api/search?${query({ query: search })}`),
 };
 
 /** The server's reason for a refusal, for an error line. */

@@ -72,3 +72,9 @@ def claude(tmp_path: Path):
 @pytest.fixture
 def me() -> int:
     return os.getpid()
+
+
+@pytest.fixture(autouse=True)
+def own_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Your own ~/.config/constellation stays out of the tests."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))

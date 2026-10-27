@@ -15,11 +15,11 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from claude_agent_sdk import get_session_info
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from . import history, hooks, options, summary, tmux
+from . import history, hooks, options, paths, resources, summary, tmux
 from .claude import files
 from .collector import Collector
 from .inbox import Inbox, InboxError
@@ -32,8 +32,12 @@ from .protocol import (
     EntryContent,
     EntryPage,
     Event,
+    FileMatches,
+    FolderMatches,
     ForkRequest,
     HookStatus,
+    Limits,
+    LimitsRequest,
     LinkMessage,
     McpServer,
     MemoryFile,
@@ -41,6 +45,8 @@ from .protocol import (
     ModelInfo,
     ModelRequest,
     ModeRequest,
+    NoticeEvent,
+    PastPrompt,
     PastSession,
     PromptRequest,
     Queued,
@@ -48,6 +54,7 @@ from .protocol import (
     ResumeRequest,
     RewindPreview,
     RewindRequest,
+    SearchHit,
     SessionOptions,
     SessionPreview,
     Snapshot,
@@ -57,6 +64,7 @@ from .protocol import (
     TagRequest,
     ToggleRequest,
     Turn,
+    UsageReport,
 )
 
 LOCAL_HOSTS = ["127.0.0.1", "localhost"]
@@ -109,6 +117,7 @@ def create_app(
     collector.manager = manager  # one manager: the collector marks its sessions as managed
     collector.ignore.add(str(summary.folder()))  # summary calls are Constellation's own, not sessions
     inbox = inbox or Inbox()
+    manager.notify = lambda text: hub.publish([NoticeEvent(text=text, at=int(time.time() * 1000))])
 
     async def poll_forever() -> None:
         while True:
@@ -118,9 +127,18 @@ def create_app(
                 print(f"poll failed: {error!r}")
             await asyncio.sleep(poll_interval)
 
+    async def sample_forever() -> None:
+        while True:
+            try:
+                await asyncio.to_thread(collector.sample)
+            except Exception as error:  # the map goes on without resources
+                print(f"sample failed: {error!r}")
+            await asyncio.sleep(resources.SAMPLE_EVERY_S)
+
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI):
         task = asyncio.create_task(poll_forever())
+        sampling = asyncio.create_task(sample_forever())
         try:
             await inbox.start()
         except OSError as error:  # messaging terminal sessions won't work; everything else does
@@ -129,6 +147,7 @@ def create_app(
             hooks.publish(url, token)
         yield
         task.cancel()
+        sampling.cancel()
         if url:
             hooks.unpublish(token)
         await inbox.close()
@@ -159,6 +178,29 @@ def create_app(
             raise HTTPException(status_code=404, detail="no such session")
         return result
 
+    @app.get("/api/sessions/{key}/usage", dependencies=api)
+    def usage_report(key: str) -> UsageReport:
+        result = collector.usage(key)
+        if result is None:
+            raise HTTPException(status_code=404, detail="no such session")
+        return result
+
+    @app.get("/api/search", dependencies=api)
+    def search(query: str = "", limit: int = Query(50, ge=1, le=200)) -> list[SearchHit]:
+        return collector.search(query, limit)
+
+    @app.get("/api/limits", dependencies=api)
+    def limits() -> Limits:
+        return collector.limits
+
+    @app.post("/api/limits", dependencies=api)
+    def change_limits(request: LimitsRequest) -> Limits:
+        try:
+            collector.limits = collector.settings.change(request)
+        except OSError as error:
+            raise HTTPException(status_code=500, detail=f"couldn't save the limits: {error}") from error
+        return collector.limits
+
     @app.get("/api/sessions/{key}/entries", dependencies=api)
     def entries(
         key: str,
@@ -172,6 +214,15 @@ def create_app(
         if page is None:
             raise HTTPException(status_code=404, detail="no such session")
         return page
+
+    @app.get("/api/sessions/{key}/entries/{entry_id}/images/{n}", dependencies=api)
+    def image(key: str, entry_id: str, n: int) -> Response:
+        """An image sent with a prompt, as it was sent (the transcript keeps it)."""
+        found = collector.image(key, entry_id, n)
+        if found is None:
+            raise HTTPException(status_code=404, detail="no such image")
+        media_type, data = found
+        return Response(content=data, media_type=media_type, headers={"Cache-Control": "private, max-age=3600"})
 
     @app.get("/api/sessions/{key}/entries/{entry_id}", dependencies=api)
     def entry(key: str, entry_id: str) -> EntryContent:
@@ -324,6 +375,13 @@ def create_app(
             ],
         )
 
+    @app.post("/api/sessions/{key}/tasks/{task_id}/stop", dependencies=api, status_code=204)
+    async def stop_task(key: str, task_id: str) -> None:
+        try:
+            await manager.stop_task(key, task_id)
+        except ManagerError as error:
+            raise refused(error) from error
+
     @app.get("/api/sessions/{key}/mcp", dependencies=api)
     async def mcp(key: str) -> list[McpServer]:
         try:
@@ -404,6 +462,8 @@ def create_app(
             managed = await manager.start(info.cwd, name=request.name, resume=session_id, fork=request.fork)
         except ManagerError as error:
             raise refused(error) from error
+        if request.fork:
+            manager.record_fork(running, info.custom_title or info.summary or session_id[:8], managed.id)
         return Started(id=managed.id)
 
     @app.post("/api/history/{session_id}/tag", dependencies=api, status_code=204)
@@ -459,6 +519,10 @@ def create_app(
 
     @app.post("/api/sessions/{key}/summary", dependencies=api, status_code=204)
     async def summarize(key: str) -> None:
+        free = collector.summary_for_free(key)
+        if free is not None:
+            collector.summaries[key] = free  # nothing happened since: no model call
+            return
         found = collector.activity(key)
         if found is None:
             raise HTTPException(status_code=404, detail="no such session")
@@ -469,7 +533,32 @@ def create_app(
             line = await summary.summarize(task, lines, manager.cli_path)
         except (OSError, RuntimeError) as error:
             raise HTTPException(status_code=409, detail=f"no summary: {error}") from error
-        collector.summaries[key] = (line, int(time.time() * 1000))  # one dict write: no lock needed
+        collector.summaries[key] = (line, int(time.time() * 1000), "model")  # one dict write: no lock needed
+
+    @app.get("/api/folders", dependencies=api)
+    def folders(path: str = "") -> FolderMatches:
+        """Folder completion for the launcher."""
+        return paths.folders(path)
+
+    @app.get("/api/sessions/{key}/files", dependencies=api)
+    def files_for(key: str, query: str = "") -> FileMatches:
+        """`@` mentions: the session's project files that match."""
+        registry = collector.registry(key)
+        if registry is None:
+            raise HTTPException(status_code=404, detail="no such session")
+        return paths.files(registry["cwd"], query)
+
+    @app.get("/api/prompts", dependencies=api)
+    def past_prompts(cwd: str, query: str = "") -> list[PastPrompt]:
+        """Your prompts in that folder, newest first, once each (C-r): Claude Code's history, plus the prompts of the
+        sessions running there, which holds the ones sent through Constellation."""
+        newest: dict[str, int] = {p.text: p.at for p in history.prompts(cwd, query, collector.claude_dir)}
+        needle = query.lower().strip()
+        for text, at in collector.prompts(cwd):
+            if text.strip() and needle in text.lower() and at > newest.get(text, -1):
+                newest[text] = at
+        ordered = sorted(newest.items(), key=lambda pair: pair[1], reverse=True)
+        return [PastPrompt(text=text, at=at) for text, at in ordered[: history.PROMPTS_MAX]]
 
     @app.get("/api/links", dependencies=api)
     def links(source: str, target: str) -> list[LinkMessage]:

@@ -35,6 +35,7 @@ EntryKind = Literal[
     "interrupt",
     "compact",
     "notice",
+    "mode",
 ]
 
 
@@ -58,6 +59,26 @@ class Context(Wire):
     percent: float | None = None
 
 
+class Resources(Wire):
+    """What a session's process tree costs the machine (roadmap 4.1, 4.2), sampled every few seconds."""
+
+    cpu: float = Field(description="Percent of one core, now: 200 is two cores busy.")
+    memory: int = Field(description="Resident memory of the process tree, bytes.")
+    gpu: int | None = Field(None, description="GPU memory of the process tree, bytes. None without nvidia-smi.")
+    processes: int = Field(description="Processes in the tree: claude, its shells, MCP servers, dev servers.")
+    cpu_history: list[float] = Field(description="One value per minute, oldest first, up to 30: its average.")
+    memory_history: list[int] = Field(description="One value per minute, oldest first, up to 30: its peak.")
+    gpu_history: list[int] = Field(description="As memory_history, for GPU memory. Empty without a GPU.")
+
+
+class Alert(Wire):
+    """A threshold crossed (design system): context, runaway CPU, or memory or GPU against your limits."""
+
+    kind: Literal["ctx", "cpu", "mem", "gpu"]
+    level: Literal["warning", "critical"]
+    text: str = Field(description="What crossed, in the design system's words: 'GPU 21.4/20 GB', 'context 97%'.")
+
+
 class PendingRequest(Wire):
     """A question, permission prompt or plan approval a session is waiting on."""
 
@@ -71,6 +92,22 @@ class PendingRequest(Wire):
         "sdk",
         description="sdk: a managed session's, answered here. hook, transcript: a terminal session's, answered there.",
     )
+
+
+class TaskInfo(Wire):
+    """A background task of a managed session (a background command, a background subagent)."""
+
+    id: str
+    description: str
+    type: str | None = None
+
+
+class ForkLink(Wire):
+    """One end of a fork: the session it came from, or one made from it."""
+
+    session: str | None = Field(None, description="Node id, while that session runs.")
+    name: str
+    at: int = Field(description="Unix ms: where the record goes in the conversation.")
 
 
 class McpSummary(Wire):
@@ -120,6 +157,9 @@ class Session(Wire):
     model: str | None = Field(None, description="The model in use: from the SDK when managed, else the last reply.")
     summary: str | None = Field(None, description="Model-written one-liner, only after you ask for one.")
     summary_at: int | None = None
+    summary_source: Literal["model", "claude"] | None = Field(
+        None, description="model: a small model wrote it. claude: Claude Code's own recap, current, so no call."
+    )
     inbox: bool = Field(False, description="It has an inbox socket Constellation can send a peer message to.")
     adopting: bool = Field(False, description="Constellation resumes it here as soon as its terminal copy exits.")
     replaces: str | None = Field(None, description="The node this one took over from: adopted, or restarted to rewind.")
@@ -132,6 +172,14 @@ class Session(Wire):
     error: str | None = Field(None, description="How the last turn failed, if it did.")
     effort: str | None = Field(None, description="Set through Constellation; until then your settings' effort applies.")
     mcp: McpSummary | None = None
+    tasks: list[TaskInfo] = Field(default_factory=list, description="Background tasks still running (managed).")
+    fork_of: ForkLink | None = Field(None, description="Forked here from that session.")
+    forks: list[ForkLink] = Field(default_factory=list, description="Sessions forked here from this one.")
+    cost_estimated: bool = Field(
+        False, description="Part of cost_usd is priced here from the transcript: Claude Code hasn't recorded it yet."
+    )
+    resources: Resources | None = Field(None, description="None until the first sample, or when the process is gone.")
+    alerts: list[Alert] = Field(default_factory=list, description="The thresholds it has crossed, most severe first.")
 
 
 class Entry(Wire):
@@ -154,6 +202,7 @@ class Entry(Wire):
     agent_id: str | None = None
     session_id: str = Field(description="The transcript this entry is in.")
     abandoned: bool = Field(False, description="On a branch a rewind left: not part of the conversation any more.")
+    images: int = Field(0, description="Prompts: the images sent with it (GET .../entries/{id}/images/{n}).")
 
 
 class EntryContent(Wire):
@@ -200,6 +249,64 @@ class Snapshot(Wire):
     edges: list[Edge]
     endpoints: list[Endpoint]
     subagents: list[Subagent]
+    totals: Totals
+
+
+class Totals(Wire):
+    """Across the machine, for the status bar."""
+
+    today_usd: float | None = Field(
+        None,
+        description="Today's cost, from every transcript written to today. An estimate: Claude Code's side calls "
+        "(titles, compaction) never reach a transcript.",
+    )
+
+
+class Limits(Wire):
+    """What a session may use before it's an alert (roadmap 4.5): 80% of a limit is a warning, past it critical."""
+
+    memory_gb: float | None = Field(description="Per session. Default: a quarter of this machine's memory.")
+    gpu_gb: float | None = Field(description="Per session. Default: the GPU's memory. None without a GPU.")
+    cpu_percent: float = Field(200, description="Busy above this for 5 minutes is runaway CPU (a warning).")
+
+
+class LimitsRequest(Wire):
+    """Change some limits; a field left out stays. `reset` puts every limit back to its default."""
+
+    memory_gb: float | None = Field(None, gt=0)
+    gpu_gb: float | None = Field(None, gt=0)
+    cpu_percent: float | None = Field(None, gt=0)
+    reset: bool = False
+
+
+class SearchHit(Wire):
+    """GET /api/search: one message that matches, in the session it's in."""
+
+    session: str
+    entry: Entry
+
+
+class UsageTurn(Wire):
+    turn: int
+    input: int
+    cache_write: int
+    cache_read: int
+    output: int
+    cost_usd: float
+
+
+class UsageReport(Wire):
+    """GET /api/sessions/{id}/usage: tokens per turn and this process's split and cost (design system: /usage)."""
+
+    turns: list[UsageTurn] = Field(description="The last 30 turns, oldest first, subagents included.")
+    since: int = Field(description="Unix ms: the process's start, which the totals below count from.")
+    input: int
+    cache_write: int
+    cache_read: int
+    output: int
+    cost_usd: float | None = Field(description="As on the session: Claude Code's own figure where it has one.")
+    estimated: bool
+    by_model: dict[str, float] = Field(description="Cost since the start per model, priced here.")
 
 
 class EntryPage(Wire):
@@ -316,6 +423,33 @@ class RewindPreview(Wire):
     turns: int = Field(description="Turns that rewinding the conversation drops.")
 
 
+class FolderMatches(Wire):
+    """Folder completion for the launcher."""
+
+    folder: bool = Field(description="What was typed is a folder.")
+    matches: list[str] = Field(description="Folders that complete it, ending in /.")
+    total: int
+
+
+class FileMatch(Wire):
+    path: str = Field(description="Relative to the session's folder; folders end in /.")
+    folder: bool
+
+
+class FileMatches(Wire):
+    """`@` mentions: the project's files and folders that match, best first."""
+
+    matches: list[FileMatch]
+    total: int
+
+
+class PastPrompt(Wire):
+    """A prompt from your history in that folder (~/.claude/history.jsonl), for C-r."""
+
+    text: str
+    at: int = Field(description="Unix ms.")
+
+
 class HookStatus(Wire):
     installed: bool
     settings: str = Field(description="The settings file the hooks go in.")
@@ -349,6 +483,19 @@ class EntriesEvent(Wire):
     reset: bool = False
 
 
+class NoticeEvent(Wire):
+    """Something the server did on its own went wrong (adopting a session): shown until dismissed."""
+
+    type: Literal["notice"] = "notice"
+    text: str
+    at: int
+
+
+class TotalsEvent(Wire):
+    type: Literal["totals"] = "totals"
+    totals: Totals
+
+
 class GraphEvent(Wire):
     type: Literal["graph"] = "graph"
     edges: list[Edge]
@@ -356,7 +503,7 @@ class GraphEvent(Wire):
     subagents: list[Subagent]
 
 
-Event = SnapshotEvent | SessionEvent | SessionRemovedEvent | EntriesEvent | GraphEvent
+Event = SnapshotEvent | SessionEvent | SessionRemovedEvent | EntriesEvent | GraphEvent | NoticeEvent | TotalsEvent
 
 
 # ── Requests (client → server) ──────────────────────────────────────────────
@@ -478,3 +625,10 @@ class Protocol(Wire):
     rewind_request: RewindRequest
     message_request: MessageRequest
     hook_status: HookStatus
+    folder_matches: FolderMatches
+    file_matches: FileMatches
+    past_prompts: list[PastPrompt]
+    limits: Limits
+    limits_request: LimitsRequest
+    usage_report: UsageReport
+    search_hits: list[SearchHit]
