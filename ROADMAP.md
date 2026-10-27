@@ -18,7 +18,7 @@ Rules for every phase:
 - **Localhost only.** The server listens on 127.0.0.1 and requires a per-run token.
 - **The design system comes first.**
   - Every screen is built from its components and tokens.
-  - It follows its rules: glyphs only through `glyph()`, its voice (terse, lowercase), nothing moving longer than 120 ms, and its keys.
+  - It follows its rules: glyphs only through `glyph()`, its voice (terse, lowercase), its motion (only the spinner, the caret and a message in flight move; no transition over 120 ms), `fg-faint` never on text you read, disabled things never faded with opacity, and its keys.
   - A UI task is done only after it's checked against the brand book (`design-system/README.md` and its sections) and the guidelines of each component it uses.
   - Where something can't follow the design system yet, it goes into this roadmap, never silently.
   - To change the design itself, edit `design-system/assets/Source/constellation.tokens.json` and rebuild. Never edit a generated file.
@@ -176,20 +176,30 @@ Left for later:
 
 ### Follow-ups
 
-These are parts of the design system the read-only app doesn't have yet, plus one correctness fix found after Phase 2:
+These are parts of the design system the read-only app didn't have yet, plus one correctness fix found after Phase 2. Done on 2026-10-27, and checked in the browser against live sessions.
 
-- [ ] **2.10 Rewound branches.**
+- [x] **2.10 Rewound branches.**
   - A transcript is a tree: rewinding or editing a prompt starts a new branch from the same parent, and the old branch stays in the file.
-  - Show only the live branch, followed back from `last-prompt.leafUuid`, and mark the abandoned ones.
-  - Today both show, as if both were current.
-- [ ] **2.11 Map keys and controls.**
+  - Show only the live branch and mark the abandoned ones. Today both show, as if both were current.
+  - Done ([`transcript.py`](server/src/constellation/claude/transcript.py)): a typed prompt with the same parent as an earlier one leaves everything from the earlier prompt on behind (`abandoned` on entries and turns). `last-prompt.leafUuid` turned out not to name the live branch (off the chain in 104 of 140 local transcripts), so it isn't used; the numbers are in [`docs/data-sources.md`](docs/data-sources.md).
+  - The conversation folds each left-behind run into one rule, `rewound · 1 turn left behind`, that opens it (muted, kept for context). The tree keeps those turns in time order, muted, with `rewound` as their meta. A jump into one opens it.
+- [x] **2.11 Map keys and controls.**
   - Keys: `h j k l` move between nodes, `enter` opens in the pane, `space` selects, `e` cycles a node's edges, `s` asks for a summary.
   - A toggle between full and compact nodes.
   - Live edges: dashes run twice when a message arrives.
-- [ ] **2.12 Edges and status bar.**
+  - Done ([`Map.tsx`](web/src/Map.tsx)): the map takes the keys when it has focus (a click on it, or `C-Space 0`), and its key hints show while it does. Also `,` rename and `&` stop on a managed node, `esc` drops the selected edge. The cursor follows whatever you open elsewhere. Selection shows `[x]` (cards) and a check and the selection ground (stars); it's kept for 5.3.
+  - `s` asks a small model (Haiku, one print-mode call with nothing saved) for a one-line summary from the session's latest steps. It shows italic and labelled `summary` on the node, and in the card's summary row.
+  - `c` toggles compact nodes in both views.
+- [x] **2.12 Edges and status bar.**
   - Clicking an edge opens the messages between the two sessions in the tree, filtered to peer messages.
   - Hovering a status-bar session shows its task and latest step.
-- [ ] **2.13 Tree search and filter keys.** `f` filter and `/` search, with matches underlined.
+  - Done: the tree opens both sessions at those messages, underlines them, keeps the rest muted with only the peer chip on, and shows a bar (`→← a and b · 2 messages · esc back`). `e` then `enter` on the map does the same. The tooltip is a floating one-line card above the bar.
+- [x] **2.13 Tree search and filter keys.** `f` filter and `/` search, with matches underlined.
+  - Done ([`Tree.tsx`](web/src/Tree.tsx)): `f` puts the keys on the filter chips (`← →`, `space` or `enter`, `1`-`7`, `esc` back). `/` opens a search bar under them: matching rows are underlined, `enter` and `n` / `N` go through them, `esc` clears. It searches the rows in the tree, so collapsed turns aren't searched until opened; finding in every conversation is `C-Space f` (5.x).
+- **Not checked live:** the dash on a live edge (it needs a message to arrive while you watch).
+- [ ] **Design-system renders.**
+  - The Hallmark pass on 2026-10-27 changed what the Textual specimen draws: the `map` label is lowercase and prompt placeholders are `fg-muted`.
+  - `design-system/assets/Screens` still shows the old renders. Re-render them with `python3 constellation_specimen.py --shots DIR` under Textual 8.2, rasterized at 2× like the originals.
 
 ---
 
@@ -220,8 +230,17 @@ These are parts of the design system the read-only app doesn't have yet, plus on
   - Done, and checked in the browser against a real session: start from the launcher with a first prompt, type, queue behind a running turn, rename inline, stop with `C-Space &` then `&`. Keys: `C-Space c` new, `C-Space ,` rename, `C-Space &` stop, `enter` send or queue, `M-enter` newline, `esc` interrupt.
   - Not checked by hand yet: pasting an image (the server path is tested) and `esc` from the browser (the API call is tested).
   - Left for later, from the design system: folder completion in the launcher; "open in a new pane or window" (one pane until 5.1); the live model list (3.5); bypass at start (3.6); `esc esc` rewind (3.9); `@` file mentions.
-- [ ] **3.5 `/` menu and model picker** (`CommandMenu`, `ModelPicker`).
-- [ ] **3.6 Modes.** `ModeBadge` with switching. Choosing bypass needs a second confirming key, as the design system says.
+- [x] **3.5 `/` menu and model picker** (`CommandMenu`, `ModelPicker`).
+  - Done ([`Prompt.tsx`](web/src/Prompt.tsx), [`Pickers.tsx`](web/src/Pickers.tsx), [`options.py`](server/src/constellation/options.py)): `/` at the start of the prompt docks the `CommandMenu` above it, with Claude Code's 136 commands and their source, ranked by prefix, then by how often you ran each in this session, then by name. `↑ ↓` `tab` `enter` `esc`. Terminal-only commands stay listed, disabled. `/model`, `/context`, `/mcp`, `/resume`, `/rewind`, `/fork` and `/rename` open Constellation's own version; `/clear` asks first while questions wait.
+  - `ModelPicker` opens from the model in the status line or `/model`: the 13 models the session reports, `(●)` on the one in use, the effort row underneath (`← →`, `tab`). It applies with `set_model()` and `/effort`; the status line then reads `haiku-5.5 low`.
+  - The launcher's model chips are the live list now (the short names), once any session has reported it.
+  - Checked live: a model and an effort changed from the picker, the menu filtered with `/co`.
+- [x] **3.6 Modes.** `ModeBadge` with switching. Choosing bypass needs a second confirming key, as the design system says.
+  - Done: `S-Tab` in the prompt box cycles default → edits → plan → auto. A click on the mode badge opens the mode menu (`1-5`, `enter`); no-ask stays listed, disabled ("set it at launch"), as the design system keeps it out of switching.
+  - Choosing bypass shows `▲ bypass · every tool in <name> runs unchecked. ! again to confirm`; `!` switches. The launcher takes bypass too, behind typing the folder's name back. The API checks both (`confirm`).
+  - Claude Code only lets a session switch to bypass if it started with `--allow-dangerously-skip-permissions`, so every managed session starts with it ([`docs/sdk-check.md`](docs/sdk-check.md)).
+  - Plan approval gained "approve, and accept edits" (`a`), left over from 3.7.
+  - Checked live: `S-Tab`, bypass from the menu with `!` (hazard stripe and `BYPASS` chip), back to default; the launcher's bypass rule on screen.
 - [x] **3.7 Answering.**
   - `QuestionCard` and `PermissionPrompt`: allow, deny, allow with changes, allow and remember
   - all three arrive in `can_use_tool`: permission prompts, `AskUserQuestion` and plan approval (`ExitPlanMode`)
@@ -230,18 +249,32 @@ These are parts of the design system the read-only app doesn't have yet, plus on
   - Done ([`Answer.tsx`](web/src/Answer.tsx)): the cards dock above the prompt box and take focus unless you're typing. `C-Space a` jumps to the session waiting longest. Questions: `1-4`, `space`, `o` Other, `tab`, `enter`. Permissions: `y` / `a` (shows the exact rule) / `e` / `n`, with risk lines for `sudo`, `rm -rf`, `curl | sh`, force pushes and writes outside the project. Plans: approve, or keep planning with a reason. The session learns about edits through a `PostToolUse` hook.
   - Checked live against a real session: a command edited, then allowed (the session noticed what ran), a single question answered with a key, a plan approved (the session moved to `default` mode, then asked before writing).
   - Not checked live yet: several questions in one card, multiple choice, the Other field.
-  - Left for 3.6: "approve the plan and accept edits", which Claude Code's terminal offers.
+  - "approve the plan and accept edits" came with 3.6.
   - pending questions show on the map and in the status bar
-- [ ] **3.8 Context.** The context bar with its breakdown, plus `/compact` and `/clear`.
-- [ ] **3.9 Session history.**
+- [x] **3.8 Context.** The context bar with its breakdown, plus `/compact` and `/clear`.
+  - Done: a click on the context bar, or `/context`, opens the breakdown from `get_context_usage()` (the design system's `ContextBar` with slices, the legend, and the tick where auto-compact fires), the memory files, and `/compact` (`c`) and `/clear` (`C`). A terminal session's bar opens its number only.
+  - `/compact` reads as the design system's inline record, `/compact 55k → 12k tokens`, one row; auto compactions say `auto`. While it runs, the activity line says `compacting…`.
+  - `/clear` asks first when questions are waiting; the conversation then draws a full-width rule labelled `cleared` where the new transcript starts.
+  - Every session's context window size is learnt from `get_context_usage()`, so managed sessions on other models get a percentage too.
+  - Checked live: the breakdown. `/compact` and `/clear` as prompts were checked in 3.1.
+- [x] **3.9 Session history.**
   - a resume picker (`list_sessions()`, with a preview from `get_session_messages()`)
   - fork, rename, tag
   - rewind (with file checkpointing on)
-- [ ] **3.10 MCP status.** `get_mcp_status()`, plus reconnect and toggle.
-- [ ] **3.11 Sessions you didn't start.**
+  - Done: `C-Space r` or `/resume` opens the resume picker: every past session, newest first, with its turns and last prompts and replies, `running` on the ones open now. `enter` resumes into the pane (or goes to it, if it's running), `f` forks, `t` tags, `/` searches.
+  - `/fork [name]` starts `<name>-fork` with the same model and effort. Rename was 3.4.
+  - `esc esc` in the prompt box, or `/rewind`, opens the rewind picker: your prompts, newest first, and what going back restores (the files edited since, `△` on those outside the project, the turns dropped). `enter` rewinds code and conversation, `c` the conversation only, `f` the files only; it asks again if files outside the project change. The conversation rewind restarts the session cut back to before that prompt, with the same model, mode and effort, and puts the prompt back in the box to edit, as Claude Code does.
+  - Checked live: rewinding code and conversation (the file went back, the old turn showed as `rewound` after the next prompt), fork, resume, tag, search.
+- [x] **3.10 MCP status.** `get_mcp_status()`, plus reconnect and toggle.
+  - Done: the status line's `mcp 4 · △ 1 down` segment, read after every turn; a click, or `/mcp`, opens the picker (`●` connected, `×` failed, `○` disabled, `?` needs auth, with tool counts and scope). `r` reconnects, `space` enables or disables. Claude Code remembers a toggle for the project, as `/mcp` does.
+  - Checked live: a server disabled and enabled again. Not checked live: reconnecting a failed server.
+- [x] **3.11 Sessions you didn't start.**
   - send them messages, using 1.13
   - adopt one: detect that its terminal copy has exited, then resume it by ID
-- [ ] **3.12 Questions from sessions still in a terminal.** The transcript doesn't record what these sessions are asking until it's answered (see `docs/data-sources.md`). Two hooks will report it instead: `PermissionRequest`, and `PreToolUse` limited to `AskUserQuestion`.
+  - Done ([`inbox.py`](server/src/constellation/inbox.py)): a terminal session's prompt box sends a peer message (the banner says so, and `/` says slash commands can't be sent). Constellation binds its own inbox, `constellation-<pid>.sock`, so replies arrive; they show as the session's sent messages and as edges to the `constellation` endpoint.
+  - `A` (or `adopt` in the pane header) asks you to close the terminal copy, then waits for it to exit and resumes the session by id as managed. Focus follows it.
+  - Checked live: a message delivered and answered with `SendMessage`; a terminal session adopted after `/exit` (same session id, its turns read, then driven from the browser).
+- [x] **3.12 Questions from sessions still in a terminal.** The transcript doesn't record what these sessions are asking until it's answered (see `docs/data-sources.md`). Two hooks will report it instead: `PermissionRequest`, and `PreToolUse` limited to `AskUserQuestion`.
   - **Test in a lab session first.**
     - Does the hook receive the full question and options?
     - Do sessions that are already running pick it up, or only new ones?
@@ -255,6 +288,22 @@ These are parts of the design system the read-only app doesn't have yet, plus on
   - **Show it** on the session as the same `QuestionCard` / `PermissionPrompt`, marked as answered in the terminal.
   - **"Go to terminal":** switch your tmux to the session's pane, using the registry's `tmux` field.
   - **Answering from Constellation** only if the test shows the hook can do it safely. Otherwise you answer in the terminal.
+  - **Done** ([`hooks.py`](server/src/constellation/hooks.py)); the lab test's answers are in [`docs/data-sources.md`](docs/data-sources.md#pending-questions-and-permission-prompts):
+    - The hooks get the full question and options. Running sessions pick them up without a restart. The report script takes 1 to 9 ms.
+    - A hook can answer, but while it runs the terminal shows no dialog, so answering from Constellation isn't safe: you answer in the terminal.
+    - The hooks are **not installed**. Installing (or removing) is the button in "see what it asks", on a waiting terminal session. It writes the script to `~/.claude/hooks/` and two entries to `~/.claude/settings.json`, keeping everything else.
+    - The question shows on the session as the read-only `QuestionCard` (or `PermissionPrompt`), with "answer it in its terminal, or A adopt"; "go to terminal" switches your tmux to its pane.
+    - Found on the way: Claude Code 2.1.311 often writes the open call to the transcript before it's answered, so without hooks Constellation shows an open question from there. One real waiting session had no open call written, so the hooks remain the reliable path.
+  - Checked live in a lab terminal session (its own tmux server, hooks in its folder's settings only): a question and a permission prompt reported, shown, and cleared when answered in the terminal. Not checked live: "go to terminal" (it would switch your own tmux).
+
+**Phase 3 done (2026-10-27).** Sessions start, take prompts, slash commands, model, effort and mode changes, answer questions and permission prompts, compact, clear, fork, rewind and resume from the browser. Sessions started elsewhere can be messaged and adopted. Server tests: 42.
+
+Left for later:
+- From the design system: folder completion in the launcher; "open in a new pane or window" (one pane until 5.1); `@` file mentions; fork's inline record in both sessions; `C-r` prompt history.
+- Not checked live: pasting an image, `esc` from the browser (3.4); several questions in one card, multiple choice, Other (3.7); reconnecting a failed MCP server (3.10); go to terminal (3.12).
+- Summaries (`s`) cost a small model call each; 5.4 refines them.
+- A failed adoption shows nothing: the terminal copy has already exited and the node leaves the map. `claude --resume <id>` still works, and the server logs why.
+- Tests for the web app.
 
 **Done when** you can start, prompt, steer and answer sessions from the browser, without opening a terminal for anything but `/login`.
 
@@ -298,7 +347,7 @@ Added on 2026-10-26 at your request. They go past design-system principle 2 ("if
   - The tree shrinks to a 3-cell strip with `▸` to bring it back.
   - The pane shrinks to its header at the bottom of the map. Clicking that header, a star or a status-bar entry opens it again.
   - The same works from the keyboard with `C-Space t` and `C-Space x`, as in the TUI. On the web, `C-Space x` toggles the pane; in the TUI it only closes it.
-- **One key the design system doesn't list:** `v` (stars or cards).
+- **Keys the design system doesn't list:** `v` (stars or cards), and `c` for the toggle between full and compact nodes, which the design system describes without a key.
 
 ## Phase 6: Terminal UI
 

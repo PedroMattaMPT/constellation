@@ -1,6 +1,6 @@
 # Data sources
 
-Where Constellation gets everything it shows about Claude Code sessions it didn't start. Everything here was checked on Linux against Claude Code 2.1.310 and 2.1.311, on 2026-10-26. Only `claude agents --json` and hooks are documented interfaces. Everything else is Claude Code's internal state and can change between releases, so the parser skips anything it doesn't recognise.
+Where Constellation gets everything it shows about Claude Code sessions it didn't start. Everything here was checked on Linux against Claude Code 2.1.310 and 2.1.311, on 2026-10-26, and the parts marked 2026-10-27 on 2.1.311 a day later. Only `claude agents --json` and hooks are documented interfaces. Everything else is Claude Code's internal state and can change between releases, so the parser skips anything it doesn't recognise.
 
 - [`research/probe.py`](../research/probe.py) puts all of this together. It's read-only and prints one JSON snapshot of the running sessions, their message edges and their subagents. On 12 live sessions it takes 2.9 s.
 - [`research/fixtures/`](../research/fixtures/) holds transcripts, registry entries and socket messages from throwaway lab sessions. They cover every case below.
@@ -10,7 +10,7 @@ Where Constellation gets everything it shows about Claude Code sessions it didn'
 | Which sessions are running | `~/.claude/sessions/<pid>.json` | yes |
 | Status, including "waiting for you" | registry `status`, plus `waitingFor` from `claude agents --json` | yes |
 | What it's doing, its history | the transcript `~/.claude/projects/<folder>/<sessionId>.jsonl` | yes, appended as it works |
-| The question or permission it's waiting on | **not in the transcript** until answered; only the screen or a hook has it | see [Pending questions](#pending-questions-and-permission-prompts) |
+| The question or permission it's waiting on | often the open call in the transcript; always the hooks | see [Pending questions](#pending-questions-and-permission-prompts) |
 | Messages between sessions | `SendMessage` results (sender) and `origin.kind: "peer"` entries (receiver), matched by `msg_id` | yes |
 | Subagents | `<sessionId>/subagents/agent-<id>.meta.json` and `.jsonl`, plus the parent's `Agent` results and notifications | yes |
 | Background sessions and forks | `~/.claude/jobs/<id>/state.json` | yes |
@@ -112,7 +112,7 @@ Counts are from all 136 local transcripts (340,170 lines).
 | `user` / `system`, `<command-name>/…</command-name>` | A slash command. Local ones (`/rename`) are `system/local_command`. Prompt-type ones (`/compact`) are `user` entries with a `<local-command-caveat>`. | tree: slash command |
 | `assistant` | **One content block per entry**: `thinking`, `text` or `tool_use`, chained by `parentUuid`. `message.model` and `message.usage` are on each. | tree: tool call, reply; latest step; context |
 | `system/turn_duration` | End of a turn: `durationMs`, `messageCount`. | turn state |
-| `system/compact_boundary` | Compaction: `compactMetadata.trigger` (`auto`/`manual`), `preTokens`, `durationMs`. | tree; context |
+| `system/compact_boundary` | Compaction: `compactMetadata.trigger` (`auto`/`manual`), `preTokens`, `postTokens`, `durationMs`. A `/compact` you ran is written after its boundary. | tree (`/compact 182k → 41k tokens`); context |
 | `system/away_summary` | A one-line recap Claude Code writes when the user is away. | "what it's doing now", for free |
 | `system/local_command`, `informational`, `scheduled_task_fire`, `model_refusal_no_fallback` | Command output, notices, `/loop` firings, refusals. | tree / skip |
 | `custom-title` | `/rename`: `customTitle`. | name |
@@ -134,7 +134,10 @@ Counts are from all 136 local transcripts (340,170 lines).
 - **Every `user` entry in the turn** shares its `promptId`, tool results included.
 - **The reply's blocks** are separate `assistant` entries chained by `parentUuid`.
 - **The turn ends** at `system/turn_duration`, or at `[Request interrupted by user]` when interrupted. Partial reply text is kept.
-- **A transcript is a tree, not a line.** Rewinding or editing a prompt starts a new branch: a new entry with the same `parentUuid` as the one it replaces. The abandoned branch stays in the file, in file order. Found in this project's own session: two prompts with the same parent, 26 s apart. The live branch is the chain followed back from the latest `last-prompt.leafUuid`. Roadmap 2.10.
+- **A transcript is a tree, not a line.** Rewinding or editing a prompt starts a new branch: a new prompt with the same `parentUuid` as the prompt it replaces. So does interrupting a prompt before any reply, then sending again. The abandoned branch stays in the file, in file order.
+  - **How Constellation finds it** (roadmap 2.10): when a typed prompt has the same parent as an earlier one, everything from the earlier prompt on is left behind. Checked on all 140 local transcripts (2026-10-27): 138 such pairs, and in 137 the older prompt is off the chain followed back from the file's last entry.
+  - **Not `last-prompt.leafUuid`.** In 104 of the 140 files the latest `leafUuid` isn't on that chain, so it doesn't name the live branch.
+  - All 138 pairs in this data dropped one prompt that never got a reply. A rewind through `resume_session_at` (Constellation's own, roadmap 3.9) has the same shape, and was checked live.
 
 ### Session identity over time
 
@@ -165,17 +168,21 @@ Counts are from all 136 local transcripts (340,170 lines).
 
 ### Pending questions and permission prompts
 
-**Neither is written to the transcript while it's open.** The tool call reaches the file only once it's approved or answered. While it's open:
+While a session asks, the registry shows `status: "waiting"`, and `claude agents --json` shows `waitingFor: "permission prompt"` or `"input needed"`. What it asks is in three places, none complete on its own:
 
-- the registry shows `status: "waiting"`
-- `claude agents --json` shows `waitingFor: "permission prompt"` or `"input needed"`
+- **The transcript, sometimes.** Claude Code 2.1.311 wrote the call (`AskUserQuestion`, or the `Bash` call waiting for permission) as soon as the model made it, and its result once answered. So an open question is a call with no result yet. But one real session waiting for `input needed` had no open call in its transcript at all, and a call with no result can also just be running. Constellation uses this only as a fallback: an open `AskUserQuestion` in the current turn, or the only open call when it waits for permission.
+- **The screen:** `tmux capture-pane`, using the registry's `tmux` field. Fragile.
+- **Two hooks**, which see every question and permission prompt while it's open. Roadmap 3.12, checked in a lab session on 2026-10-27:
 
-So for sessions Constellation didn't start, it can show **that** a session needs you and which kind, but not **what** it's asking. Only two places have the details:
+| Question | Answer |
+|---|---|
+| Does the hook get the full question? | **Yes.** `PreToolUse` on `AskUserQuestion` gets `tool_input.questions` (question, header, options with descriptions, `multiSelect`) and `tool_use_id`. `PermissionRequest` gets `tool_name`, `tool_input` and `permission_suggestions` (`addRules`, `addDirectories`, `setMode`), and **no** `tool_use_id`. Both carry `session_id`, `transcript_path`, `cwd` and `permission_mode`. |
+| Does a question fire both? | **Yes.** `AskUserQuestion` also fires `PermissionRequest`, 60 ms after `PreToolUse`. Constellation keeps one. |
+| Do running sessions pick it up? | **Yes.** Hooks added to a settings file while a session runs fire on its next question, without a restart. |
+| How long does it add? | The report script: 1 ms with no server (no address file), 6 ms with a stale address file, 9 ms when it posts (median of 10 each). It passes the token to `curl` from a file (`-H @file`), never on its command line. |
+| Could the hook answer? | **Yes, but not safely.** A `PermissionRequest` hook that returns `{"decision": {"behavior": "deny"}}` does decide. While it runs, though, the terminal shows no dialog at all, only the command. A hook that waited for an answer from Constellation would leave the terminal with nothing to answer, until the hook's timeout. So the hook only reports, and you answer in the terminal. |
 
-- **the screen:** `tmux capture-pane`, using the registry's `tmux` field. It's fragile.
-- **a hook:** a `PermissionRequest` hook, and a `PreToolUse` hook on `AskUserQuestion`, receive the full tool input. That means adding a hook to your settings.
-
-**Decided: hooks** ([roadmap 3.12](../ROADMAP.md)), tested on a lab session before they go into your settings. For managed sessions, including adopted ones, this doesn't matter, because the SDK's `can_use_tool` callback receives both.
+The hook's report is dropped once the call's result is in the transcript, or once the session has stopped waiting. For managed sessions, including adopted ones, none of this matters: the SDK's `can_use_tool` callback receives every question and permission prompt.
 
 ---
 
@@ -252,7 +259,8 @@ The inbox socket takes **one JSON line per message**. The format was captured by
 - **Nothing is sent back** on the connection.
 - On Linux an auth line is optional. Constellation has no token for another session anyway.
 - **It was tested end to end.** A script sent this to lab-b. Lab-b recorded it as `name: "constellation"`, with the script's operating-system-verified `pid`, and replied with `SendMessage` to the `from` address. The reply arrived as the same kind of JSON line, with a `hop-chain` attribute.
-- **Constellation needs its own inbox:** a socket of its own in `/run/user/<uid>/cc-socks/` (mode 600) to receive replies.
+- **Constellation needs its own inbox:** a socket of its own in `/run/user/<uid>/cc-socks/` (mode 600) to receive replies. It's `constellation-<pid>.sock`, so it never looks like a session's `<pid>.sock`.
+- **Checked from the server on 2026-10-27** (roadmap 3.11): a terminal session got the message as `name: "constellation"`, `fromMode: "prompting"`, with the server's verified pid, and replied to its socket with `SendMessage`. The map shows both directions as edges to the `constellation` endpoint.
 - The receiver's inbound controls still apply. A session that bypasses permissions holds messages from a sender that says `prompting`.
 - **This format is undocumented.** Check `msgV` and the receiver's `peerProtocol` before sending.
 
@@ -272,7 +280,7 @@ The inbox socket takes **one JSON line per message**. The format was captured by
 
 ## 6. Still open
 
-- **What a pending question or permission is asking**, for sessions Constellation didn't start: hooks, still to be tested (roadmap 3.12). See [Pending questions](#pending-questions-and-permission-prompts).
+- **When Claude Code writes an open call to the transcript.** In the lab it was always at once; in one real session waiting for input it wasn't there. The hooks don't depend on it. See [Pending questions](#pending-questions-and-permission-prompts).
 - **Live cost** for those sessions needs a price table, because `cost-state` isn't written continuously.
 - **Context windows** for models other than the two checked.
 - **Agent-team** links haven't been seen in any transcript yet.

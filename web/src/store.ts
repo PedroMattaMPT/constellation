@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { type Connection, connectLive, TOKEN } from './api';
-import type { Edge, EntriesEvent, Endpoint, Event, Session, Subagent } from './protocol';
+import { type Connection, api, connectLive, TOKEN } from './api';
+import type { Edge, EntriesEvent, Endpoint, Event, HookStatus, Session, Subagent } from './protocol';
 
 export interface Jump {
   session: string;
@@ -27,8 +27,21 @@ function loadHidden(): Hidden {
   return { tree: false, pane: false };
 }
 
-/** What floats over the panes: the launcher, or the stop confirmation for one session. */
-export type Dialog = { kind: 'launcher' } | { kind: 'stop'; session: string };
+/**
+ * What floats over the panes (design system: the floating layer): the launcher and the resume picker, or a dialog,
+ * picker or card for one session.
+ */
+export type Dialog =
+  | { kind: 'launcher' }
+  | { kind: 'resume' }
+  | { kind: 'hooks' }
+  | { kind: 'stop' | 'model' | 'mode' | 'context' | 'mcp' | 'rewind' | 'adopt' | 'clear'; session: string };
+
+/** The messages between two sessions, opened from their edge on the map. */
+export interface Link {
+  source: string;
+  target: string;
+}
 
 export interface State {
   connection: Connection | 'no-token';
@@ -45,6 +58,16 @@ export interface State {
   renaming: string | null;
   /** Bumped by C-Space a: the focused session's question or permission card takes the keys. */
   attention: number;
+  /** Bumped by C-Space 0: the map takes the keys. */
+  mapFocus: number;
+  /** Sessions picked on the map (space), for sending one prompt to several (roadmap 5.3). */
+  selected: string[];
+  /** The edge whose messages the tree shows. */
+  link: Link | null;
+  /** Text to put back in a session's prompt box: the prompt a rewind went back to. */
+  draft: { session: string; text: string; nonce: number } | null;
+  /** Whether the hooks that show a terminal session's questions are installed (roadmap 3.12). */
+  hooks: HookStatus | null;
   /** Ticks every few seconds so "12s ago" stays true. */
   now: number;
 }
@@ -65,8 +88,15 @@ class Store {
     dialog: null,
     renaming: null,
     attention: 0,
+    mapFocus: 0,
+    selected: [],
+    link: null,
+    draft: null,
+    hooks: null,
     now: Date.now(),
   };
+  /** The focused session, after it left the map: a session that replaces it (adopted, rewound) takes focus. */
+  private gone: string | null = null;
   private listeners = new Set<Listener>();
   private entryListeners = new Set<EntriesListener>();
 
@@ -98,13 +128,21 @@ class Store {
         this.set({ sessions, edges, endpoints, subagents, focused: this.keepFocus(sessions) });
         break;
       }
-      case 'session':
+      case 'session': {
+        const fresh = !this.state.sessions[event.session.id];
         this.set({ sessions: { ...this.state.sessions, [event.session.id]: event.session } });
         if (!this.state.focused) this.set({ focused: event.session.id });
+        else if (fresh && event.session.replaces && event.session.replaces === this.gone) {
+          this.gone = null;
+          this.focus(event.session.id);
+        }
         break;
+      }
       case 'session_removed': {
         const { [event.id]: _gone, ...sessions } = this.state.sessions;
-        this.set({ sessions, focused: this.keepFocus(sessions) });
+        if (event.id === this.state.focused) this.gone = event.id;
+        const selected = this.state.selected.filter((id) => id !== event.id);
+        this.set({ sessions, selected, focused: this.keepFocus(sessions) });
         break;
       }
       case 'graph':
@@ -147,6 +185,25 @@ class Store {
     this.set({ attention: Date.now() });
   }
 
+  /** space on the map: add a session to the selection, or take it out. */
+  select(id: string) {
+    const { selected } = this.state;
+    this.set({ selected: selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id] });
+  }
+
+  openLink(source: string, target: string) {
+    this.set({ link: { source, target } });
+    if (this.state.hidden.tree) this.toggle('tree');
+  }
+
+  async refreshHooks() {
+    try {
+      this.set({ hooks: await api.hooks() });
+    } catch {
+      // unknown: the pane simply doesn't offer them
+    }
+  }
+
   toggle(part: keyof Hidden) {
     const hidden = { ...this.state.hidden, [part]: !this.state.hidden[part] };
     this.set({ hidden });
@@ -164,6 +221,7 @@ class Store {
       (connection) => this.set({ connection }),
     );
     const tick = window.setInterval(() => this.set({ now: Date.now() }), 5000);
+    void this.refreshHooks();
     return () => {
       stop();
       window.clearInterval(tick);

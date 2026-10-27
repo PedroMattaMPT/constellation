@@ -45,3 +45,22 @@ What the Claude Agent SDK for Python does with your own Claude Code setup. Check
 - **Questions and permissions come to the server.** `can_use_tool` hands Constellation every question, permission prompt and plan approval while the session waits. That's the piece the transcript never has (see `data-sources.md`, "Pending questions"). For managed sessions, the hooks in 3.12 aren't needed.
 - **Allow with changes** should tell the session what changed, for example with a note in the next prompt or as a `PostToolUse` context. Otherwise its own account of the change is wrong.
 - **Cost:** `ResultMessage.total_cost_usd` is a running total for the session ID, not a per-turn cost. It restarts after `/clear`, with the new ID.
+
+## Found while building the rest of Phase 3 (2026-10-27)
+
+Checked on Claude Code 2.1.311, against throwaway sessions in a scratch folder on Haiku 5.5.
+
+| Check | Answer | Notes |
+|---|---|---|
+| `get_server_info()` commands | **136**, one shape | Each is `{name, description, argumentHint, builtin?, aliases?}`. Built-ins (and bundled skills) have `builtin: true`. Others end their description with where they come from: `(user)`, `(project)`, `(claude.ai sync)`; plugin commands are named `plugin:command`. Terminal-only commands (`/theme`, `/login`, `/terminal-setup`) aren't listed, except `/color`. |
+| `get_server_info()` models | **13 models** | `{value, resolvedModel, displayName, description, supportedEffortLevels, supportsAutoMode, …}`. `value` is what `set_model()` takes; `default` and `opus` both resolve to `claude-opus-5-5`. Effort levels are `low medium high xhigh max`. |
+| `get_context_usage()` | **yes** | Categories carry `id` and `kind` (`used`, `deferred`, `buffer`, `free`); `autoCompactThreshold` is in tokens (967,000 of 1,000,000 here). |
+| `get_mcp_status()` at start | servers **`pending`** at first | Tool counts come once they connect, so Constellation reads it again after every turn. `toggle_mcp_server()` is remembered per project in `~/.claude.json` (`disabledMcpServers`), as `/mcp` does. |
+| Switching to bypass | **only with a launch flag** | `set_permission_mode("bypassPermissions")` fails with "the session was not launched with --dangerously-skip-permissions" unless the session started with `--allow-dangerously-skip-permissions`. Every managed session starts with it; Constellation keeps bypass behind its confirming key, in the browser and in the API. |
+| Rewinding files | **yes** | `enable_file_checkpointing=True`, then `rewind_files(<prompt's uuid>)` with the uuid from the transcript: the file went back to its earlier content. |
+| Rewinding the conversation | **yes, as a restart** | Stop the session and resume it with `resume_session_at=<the prompt's parentUuid>`. Same session id, new process. Don't pass `resume_drops_turn`: by the SDK's own description it refuses a resume whose dropped range holds anything but that one turn, so going back more than one prompt fails. Checked live: a rewind across five turns, with a peer message and a slash command among them. The next prompt continues from that line, which leaves the old turns as an abandoned branch in the transcript. Model, mode and effort have to be passed again (`model`, `permission_mode`, `effort`), or your defaults apply. |
+| Forking | **yes** | `resume=<id>, fork_session=True`: a new session id. Its transcript is written with its first prompt. |
+| Adopting | **yes** | After the terminal copy exits, `resume=<id>` in the same folder continues the same session id and file. |
+| Effort at start | **yes** | `ClaudeAgentOptions(effort=…)`. |
+
+**Starting the server from inside a Claude Code session** (`! ./dev`, or an agent running it) hands that session's variables to everything the server starts: `CLAUDE_CODE_CHILD_SESSION` turns transcript saving off ("inherited CLAUDE_CODE_CHILD_SESSION marker"), and `CLAUDE_CODE_SESSION_ID` and `CLAUDE_CODE_MESSAGING_*` claim the parent's identity and inbox. `constellation serve` drops exactly those (`manager.SESSION_ENV`) when it starts. Your own `CLAUDE_CODE_*` settings pass through.

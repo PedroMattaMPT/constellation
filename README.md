@@ -92,8 +92,8 @@ Managed sessions keep Claude Code's features. Constellation draws its own versio
 
 | Feature | How (Python SDK) |
 |---|---|
-| `/` menu with autocomplete | `get_server_info()` lists the commands: built-ins that work without a terminal, bundled skills, your skills, custom commands and MCP prompts |
-| Model picker | `set_model()`. The model list probably also comes from `get_server_info()` (to verify) |
+| `/` menu with autocomplete | `get_server_info()` lists the commands: built-ins that work without a terminal, bundled skills, your skills, custom commands, plugins and MCP prompts |
+| Model picker | `set_model()`, with the model list and effort levels from `get_server_info()` |
 | Effort | `/effort <level>` sent as a prompt |
 | `/compact`, `/clear` | sent as prompts; compacting reports how many tokens there were before |
 | Context percentage, `/context` | `get_context_usage()`: percentage, tokens used and maximum, breakdown by category, auto-compact threshold |
@@ -172,7 +172,7 @@ A desktop notification fires when a session asks a question or shows a permissio
 | Which external sessions are running, their status | `~/.claude/sessions/<pid>.json` (one per running session), `claude agents --json` |
 | External sessions' prompts, replies, tool calls, slash commands | the transcript: `~/.claude/projects/<folder>/<sessionId>.jsonl`, written live |
 | External sessions' mode | `permission-mode` entry in the transcript (written each turn) |
-| External sessions waiting for you | registry `status: waiting`, plus `waitingFor` (`permission prompt` or `input needed`) from `claude agents --json`. What they're asking is not in the transcript until answered: only the screen or a hook has it |
+| External sessions waiting for you | registry `status: waiting`, plus `waitingFor` (`permission prompt` or `input needed`) from `claude agents --json`. What they're asking: often the open call in the transcript, and always the two optional hooks |
 | Messaging external sessions | one JSON line on the session's inbox socket; Constellation binds its own socket to receive replies |
 | Subagents | the SDK stream (`parent_tool_use_id`); for external sessions, `<sessionId>/subagents/agent-*.jsonl` |
 | Messages between sessions | `SendMessage` calls (sender) and `origin.kind: "peer"` entries (receiver), matched by `msg_id` |
@@ -186,6 +186,9 @@ The Agent SDK, `claude agents --json` and hooks are documented interfaces. The t
 - **Load your setup.** Managed sessions must load your settings, CLAUDE.md, skills, plugins and MCP servers (`setting_sources=["user", "project", "local"]`) and use your normal login. Never use bare mode, which skips all of that and needs an API key. The docs say bare will become the default for headless runs in a future release, so set this explicitly.
 - **One process per session.** Adopting an external session reopens it in Constellation, so the terminal copy must be closed first.
 - **Localhost only.** Anyone who can reach the server can run commands through your sessions.
+- **Bypass stays behind a second key.** Claude Code only lets a session switch to bypass if it started with `--allow-dangerously-skip-permissions`, so every managed session does. Constellation asks for the key that names the session before it switches, and the API checks it too.
+- **The hooks are yours to install.** Seeing what a terminal session asks, reliably, needs two hooks in your user settings, which then run in every session. Constellation installs or removes them only when you say so, and they only report: they never answer or block.
+- **Not a child of the session that started it.** If you start the server from inside Claude Code (`! ./dev`), it drops that session's variables first, or its sessions would write no transcript and claim the parent's inbox.
 
 ## Decided
 
@@ -200,7 +203,11 @@ The Agent SDK, `claude agents --json` and hooks are documented interfaces. The t
 
 ## Running it
 
-Needs Linux, Claude Code, Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node 24+. The web app is read-only so far: the map, the message tree and the conversations of every running session (roadmap Phase 2).
+Needs Linux, Claude Code, Python 3.12+ with [uv](https://docs.astral.sh/uv/), and Node 24+. The web app is the MVP of roadmap Phases 2 and 3:
+
+- It shows every running session live: the map, the message tree, and each conversation.
+- It starts and drives sessions of its own: prompts and images, the `/` menu, model, effort and mode, questions and permission prompts, context, MCP servers, fork, rewind and resume.
+- It messages and adopts sessions you started in a terminal, and shows what they ask, read-only.
 
 - **Development:** `./dev` starts the server on 127.0.0.1:7337 and the web app with live reload on 127.0.0.1:7338. Open the link the server prints: the token in it is new on every start.
 - **Without the dev server:** build the web app once with `npm --prefix web run build`, then run `uv run --project server constellation serve` and open the link it prints.

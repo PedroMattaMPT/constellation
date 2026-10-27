@@ -83,6 +83,8 @@ class Item:
     peer: str | None = None
     msg_id: str | None = None
     agent_id: str | None = None
+    parent: str | None = None  # prompts: the line they continue from, where a rewind to them resumes
+    abandoned: bool = False
 
     def wire(self) -> Entry:
         return Entry(
@@ -102,6 +104,7 @@ class Item:
             msg_id=self.msg_id,
             agent_id=self.agent_id,
             session_id=self.session_id,
+            abandoned=self.abandoned,
         )
 
 
@@ -114,6 +117,17 @@ class Timeline:
     turn: int = 0
     counts: Counter = field(default_factory=Counter)
     turn_sizes: Counter = field(default_factory=Counter)
+    abandoned: set[int] = field(default_factory=set)  # turns on a branch a rewind left
+
+    def abandon(self, first_turn: int, changed: dict[str, Item]) -> None:
+        """Marks every turn from `first_turn` to the latest as left behind by a rewind."""
+        for item in reversed(self.items):
+            if item.turn < first_turn:
+                break
+            if not item.abandoned:
+                item.abandoned = True
+                changed[item.id] = item
+        self.abandoned.update(range(first_turn, self.turn + 1))
 
     def add(
         self,
@@ -180,6 +194,11 @@ class Transcript:
         self.received: list[dict] = []
         self.agents: dict[str, dict] = {}
         self._calls: dict[str, Item] = {}
+        self.settled: set[str] = set()  # tool calls whose result is written: answered, allowed or denied
+        # The prompt that last continued from each parent line: a second one means a rewind.
+        self._prompt_after: dict[str, Item] = {}
+        self._first_prompt: Item | None = None
+        self._compacted: Item | None = None  # the latest record of a /compact you ran
 
     @property
     def exists(self) -> bool:
@@ -231,11 +250,11 @@ class Transcript:
             return item
 
         if kind == "user":
-            self._user(e, offset, add, changed)
+            self._user(e, offset, add, tl, changed)
         elif kind == "assistant":
             self._assistant(e, add)
         elif kind == "system":
-            self._system(e, add)
+            self._system(e, add, tl, changed)
         elif kind == "custom-title":
             self.title = e.get("customTitle")
         elif kind == "ai-title":
@@ -251,7 +270,7 @@ class Transcript:
         elif kind == "frame-link" and e.get("frameUrl") and e["frameUrl"] not in self.artifacts:
             self.artifacts.append(e["frameUrl"])
 
-    def _user(self, e: dict, offset: int, add, changed: dict[str, Item]) -> None:
+    def _user(self, e: dict, offset: int, add, tl: Timeline, changed: dict[str, Item]) -> None:
         origin = e.get("origin") or {}
         source = origin.get("kind")
         content = (e.get("message") or {}).get("content")
@@ -311,6 +330,9 @@ class Transcript:
                     add("notice", text, starter=True)
                 return
             command = COMMAND.search(content)
+            compacted = self._compacted
+            if command and command.group(1) == "compact" and compacted is not None and compacted.turn == tl.turn:
+                return  # the /compact you ran is written after its record: one row says both
             if command:
                 args = COMMAND_ARGS.search(content)
                 add(
@@ -327,7 +349,7 @@ class Transcript:
                 self.turn_open = False
                 add("interrupt", "interrupted")
             elif not e.get("isMeta") and not content.startswith(SKIPPED_TEXT) and source in (None, "human"):
-                self._prompt(first_line(content), add)
+                self._prompt(first_line(content), add, e, tl, changed)
             return
 
         if not isinstance(content, list):
@@ -351,16 +373,30 @@ class Transcript:
                 images += 1
         if (texts or images) and source in (None, "human"):
             text = first_line("\n".join(texts)) or "(image)"
-            self._prompt(text, add, detail=f"+ {images} image{'s' if images > 1 else ''}" if images else None)
+            detail = f"+ {images} image{'s' if images > 1 else ''}" if images else None
+            self._prompt(text, add, e, tl, changed, detail=detail)
 
-    def _prompt(self, text: str, add, detail: str | None = None) -> None:
+    def _prompt(
+        self, text: str, add, e: dict, tl: Timeline, changed: dict[str, Item], detail: str | None = None
+    ) -> None:
         if not text:
             return
+        parent = e.get("parentUuid")
+        replaced = self._prompt_after.get(parent) if parent else None
+        if replaced is not None and not replaced.abandoned:
+            tl.abandon(replaced.turn, changed)  # a rewind: the old prompt and all that followed it are left behind
+            if self._first_prompt is not None and self._first_prompt.abandoned:
+                self.first_prompt = self._first_prompt = None
         self.turn_open = True
-        self.first_prompt = self.first_prompt or text
-        add("prompt", text, starter=True, detail=detail)
+        item = add("prompt", text, starter=True, detail=detail, parent=parent)
+        if parent:
+            self._prompt_after[parent] = item
+        if self._first_prompt is None:
+            self._first_prompt, self.first_prompt = item, text
 
     def _tool_result(self, block: dict, result: dict, offset: int, add, changed: dict[str, Item]) -> None:
+        if block.get("tool_use_id"):
+            self.settled.add(block["tool_use_id"])
         call = self._calls.pop(block.get("tool_use_id", ""), None)
         if call is None:
             return
@@ -447,22 +483,22 @@ class Transcript:
         if block.get("id"):
             self._calls[block["id"]] = item
 
-    def _system(self, e: dict, add) -> None:
+    def _system(self, e: dict, add, tl: Timeline, changed: dict[str, Item]) -> None:
         subtype, content = e.get("subtype"), e.get("content") or ""
         if subtype == "turn_duration":
             self.turn_open = False
         elif subtype == "compact_boundary":
+            # The design system's inline record: `/compact 182k → 41k tokens`, marked auto when you didn't run it.
             self.compactions += 1
             meta = e.get("compactMetadata") or {}
-            tokens = meta.get("preTokens")
-            add(
-                "compact",
-                "conversation compacted",
-                starter=True,
-                detail=" · ".join(
-                    x for x in (meta.get("trigger"), f"{tokens // 1000}k tokens" if tokens else None) if x
-                ),
-            )
+            pre, post = meta.get("preTokens"), meta.get("postTokens")
+            tokens = f"{pre // 1000}k → {post // 1000}k tokens" if pre and post else None
+            if pre and not post:
+                tokens = f"{pre // 1000}k tokens"
+            trigger = "auto" if meta.get("trigger") == "auto" else None
+            detail = " · ".join(x for x in (trigger, tokens) if x) or None
+            item = add("compact", "/compact", starter=True, detail=detail)
+            self._compacted = None if trigger else item
         elif subtype == "away_summary":
             self.away_summary = first_line(content, 300)
             add("notice", first_line(content))
@@ -489,6 +525,16 @@ class Transcript:
         with self.path.open("rb") as fh:
             fh.seek(offset)
             return json.loads(fh.readline())
+
+    def call_input(self, item: Item) -> dict:
+        """A tool call's input as written, whole (content() cuts it for display). {} when it can't be read."""
+        try:
+            blocks = (self.line_at(item.offset).get("message") or {}).get("content") or []
+            block = blocks[item.block] if item.block < len(blocks) else {}
+        except (OSError, ValueError, AttributeError, TypeError):
+            return {}
+        tool_input = block.get("input") if isinstance(block, dict) else None
+        return tool_input if isinstance(tool_input, dict) else {}
 
     def content(self, item: Item) -> EntryContent:
         line = self.line_at(item.offset)
@@ -526,6 +572,10 @@ class Transcript:
         )
 
     # ── Derived ───────────────────────────────────────────────────────────
+
+    def open_calls(self) -> list[Item]:
+        """Tool calls written with no result yet: running, or waiting on a question or permission prompt."""
+        return list(self._calls.values())
 
     def context(self) -> tuple[str, int] | None:
         if not self.usage or not self.model:

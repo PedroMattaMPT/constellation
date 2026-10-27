@@ -56,3 +56,24 @@ def subagent_meta(transcript: Path, agent_id: str) -> dict | None:
         return json.loads((transcript.with_suffix("") / "subagents" / f"agent-{agent_id}.meta.json").read_text())
     except (OSError, ValueError):
         return None
+
+
+def setting(cwd: str, key: str, claude_dir: Path = CLAUDE_DIR):
+    """A setting as Claude Code resolves it: local, then project, then user settings."""
+    for path in (
+        Path(cwd) / ".claude" / "settings.local.json",
+        Path(cwd) / ".claude" / "settings.json",
+        claude_dir / "settings.json",
+    ):
+        try:
+            value = json.loads(path.read_text()).get(key)
+        except (OSError, ValueError, AttributeError):
+            continue
+        if value is not None:
+            return value
+    return None
+
+
+def runtime_dir() -> Path:
+    """$XDG_RUNTIME_DIR: private to you, gone at logout. Claude Code keeps its inbox sockets here too."""
+    return Path(os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}")

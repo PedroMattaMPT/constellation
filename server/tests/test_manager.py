@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 
 import pytest
 from claude_agent_sdk import (
@@ -18,6 +19,7 @@ from fastapi.testclient import TestClient
 from constellation.app import create_app
 from constellation.claude.files import proc_start
 from constellation.collector import Collector
+from constellation.inbox import Inbox
 from constellation.manager import Manager, ManagerError
 
 AUTH = {"Authorization": "Bearer secret"}
@@ -44,6 +46,7 @@ class FakeClient:
     def __init__(self, options):
         self.options = options
         self.sent: list[str] = []
+        self.calls: list[tuple] = []
         self.stream: asyncio.Queue = asyncio.Queue()
         self.interrupted = False
         self.closed = False
@@ -70,6 +73,44 @@ class FakeClient:
         self.closed = True
         await self.stream.put(None)
 
+    async def set_model(self, model=None):
+        self.calls.append(("set_model", model))
+
+    async def set_permission_mode(self, mode):
+        if mode == "bypassPermissions" and "allow-dangerously-skip-permissions" not in self.options.extra_args:
+            raise RuntimeError("not launched with --dangerously-skip-permissions")
+        self.calls.append(("set_permission_mode", mode))
+
+    async def get_context_usage(self):
+        return {
+            "model": "claude-test-1",
+            "totalTokens": 1000,
+            "maxTokens": 1_000_000,
+            "rawMaxTokens": 2_000_000,
+            "percentage": 0.05,
+            "isAutoCompactEnabled": True,
+            "autoCompactThreshold": 1_500_000,
+            "categories": [{"id": "messages", "name": "Messages", "tokens": 1000, "kind": "used"}],
+            "memoryFiles": [{"path": "/x/CLAUDE.md", "tokens": 12}],
+        }
+
+    async def get_mcp_status(self):
+        return {
+            "mcpServers": [
+                {"name": "one", "status": "connected", "tools": [{"name": "t"}]},
+                {"name": "two", "status": "failed", "error": "boom"},
+            ]
+        }
+
+    async def reconnect_mcp_server(self, name):
+        self.calls.append(("reconnect", name))
+
+    async def toggle_mcp_server(self, name, enabled):
+        self.calls.append(("toggle", name, enabled))
+
+    async def rewind_files(self, message_id):
+        self.calls.append(("rewind_files", message_id))
+
 
 async def settle():
     for _ in range(5):
@@ -90,7 +131,9 @@ def test_start_uses_your_setup_and_leaves_tmux_and_mode_alone(tmp_path):
         assert options.setting_sources == ["user", "project", "local"]
         assert options.env == {"TMUX": "", "TMUX_PANE": ""}
         assert options.permission_mode is None and managed.mode == "auto"  # your default mode
-        assert options.extra_args == {"name": "lab"}
+        # bypass can be chosen later (behind Constellation's confirming key); files can be rewound
+        assert options.extra_args == {"allow-dangerously-skip-permissions": None, "name": "lab"}
+        assert options.enable_file_checkpointing and options.resume is None
         with pytest.raises(ManagerError):
             await manager.start(str(tmp_path / "missing"))
         await manager.close()
@@ -259,13 +302,15 @@ def test_managed_sessions_show_as_managed_and_waiting(claude, me, tmp_path):
     run(go)
 
 
-def test_api_refuses_bypass_at_start_and_unknown_sessions(claude, me, tmp_path):
+def test_api_refuses_bypass_without_its_confirmation_and_unknown_sessions(claude, me, tmp_path):
     claude.register(me, "s1", "lab-a")
     collector = Collector(claude.root, waiting_for=dict, manager=Manager(client_factory=FakeClient))
-    app = create_app(collector, "secret", poll_interval=0.05)
+    app = create_app(collector, "secret", poll_interval=0.05, inbox=Inbox(tmp_path / "socks"))
     with TestClient(app, base_url="http://127.0.0.1") as client:
         start = {"cwd": str(tmp_path), "model": None, "mode": "bypassPermissions", "name": None}
         assert client.post("/api/sessions", json=start, headers=AUTH).status_code == 422
+        wrong = client.post("/api/sessions", json={**start, "confirm": "nope"}, headers=AUTH)
+        assert wrong.status_code == 422 and "folder's name" in wrong.json()["detail"]
         prompt = client.post("/api/sessions/nope/prompt", json={"text": "hi"}, headers=AUTH)
         assert prompt.status_code == 409 and "manages" in prompt.json()["detail"]
         cross = client.post("/api/sessions/nope/stop", headers={**AUTH, "Origin": "https://evil.example"})
@@ -280,3 +325,124 @@ def test_api_refuses_bypass_at_start_and_unknown_sessions(claude, me, tmp_path):
         }
         assert FakeClient.made[-1].sent == ["hi"]
         assert client.post(f"/api/sessions/{key}/stop", headers=AUTH).status_code == 204
+
+
+def test_model_mode_effort_context_and_mcp(tmp_path):
+    async def go():
+        manager = Manager(client_factory=FakeClient)
+        managed = await manager.start(str(tmp_path))
+        client = FakeClient.made[-1]
+        managed.info = {"models": [{"value": "haiku", "resolvedModel": "claude-haiku-5-5"}]}
+        await manager.set_model(managed.id, "haiku")
+        assert ("set_model", "haiku") in client.calls and managed.model == "claude-haiku-5-5"
+
+        await manager.set_mode(managed.id, "bypassPermissions")  # allowed by the launch flag
+        assert managed.mode == "bypassPermissions"
+        assert await manager.set_effort(managed.id, "low") == 0 and client.sent[-1] == "/effort low"
+        assert managed.effort == "low"
+
+        usage = await manager.context(managed.id)
+        assert usage["totalTokens"] == 1000 and manager.windows == {"claude-test-1": 2_000_000}
+        assert managed.compact_at == 0.75
+
+        servers = await manager.mcp_toggle(managed.id, "two", False)
+        assert ("toggle", "two", False) in client.calls and [m["status"] for m in servers] == ["connected", "failed"]
+        await manager.close()
+
+    run(go)
+
+
+def test_plan_approval_can_switch_mode_but_never_to_bypass(tmp_path):
+    async def go():
+        manager = Manager(client_factory=FakeClient)
+        managed = await manager.start(str(tmp_path))
+        waiting = ask(FakeClient.made[-1], "ExitPlanMode", {"plan": "do it"})
+        await settle()
+        (pending,) = managed.pending.values()
+        with pytest.raises(ManagerError):
+            manager.answer(managed.id, pending.id, allow=True, mode="bypassPermissions")
+        manager.answer(managed.id, pending.id, allow=True, mode="acceptEdits")
+        (update,) = (await waiting).updated_permissions
+        assert (update.type, update.mode, update.destination) == ("setMode", "acceptEdits", "session")
+        await manager.close()
+
+    run(go)
+
+
+def test_fork_and_rewind_start_from_the_old_session(tmp_path):
+    async def go():
+        # Every fake session reports this test's pid, so each new one takes the previous one's place.
+        manager = Manager(client_factory=FakeClient)
+        managed = await manager.start(str(tmp_path), name="lab")
+        managed.session_id = "s1"
+        managed.model, managed.mode, managed.effort = "claude-haiku-5-5", "plan", "low"
+        first = FakeClient.made[-1]
+        await manager.rewind(managed.id, "p2", "line-1", files_too=True, conversation=True)
+        assert ("rewind_files", "p2") in first.calls and first.closed
+        options = FakeClient.made[-1].options
+        assert (options.resume, options.fork_session, options.resume_session_at) == ("s1", False, "line-1")
+        # it carries on as it was
+        assert (options.model, options.permission_mode, options.effort) == ("claude-haiku-5-5", "plan", "low")
+        # no resume_drops_turn: it refuses a resume that drops more than one turn
+        assert options.resume_drops_turn is None and manager.sessions[managed.id].replaces == managed.id
+
+        assert manager.sessions[managed.id].session_id == "s1"  # resumed: it's that session before its first turn
+        await manager.fork(managed.id, "lab-fork")
+        options = FakeClient.made[-1].options
+        assert (options.resume, options.fork_session, options.extra_args["name"]) == ("s1", True, "lab-fork")
+        await manager.close()
+
+    run(go)
+
+
+def test_adopting_waits_for_the_terminal_copy_to_exit(tmp_path):
+    async def go():
+        terminal = await asyncio.create_subprocess_exec(sys.executable, "-c", "import time; time.sleep(30)")
+        manager = Manager(client_factory=FakeClient)
+        manager.adopt("t-1", "s9", str(tmp_path), "term", terminal.pid, proc_start(terminal.pid))
+        await asyncio.sleep(0.7)
+        assert "t-1" in manager.adopting and not manager.sessions  # still open in its terminal
+        terminal.kill()
+        await terminal.wait()
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            if manager.sessions:
+                break
+        (managed,) = manager.sessions.values()
+        assert FakeClient.made[-1].options.resume == "s9" and managed.replaces == "t-1" and not manager.adopting
+        await manager.close()
+
+    run(go)
+
+
+def test_adopting_through_the_api(claude, tmp_path):
+    terminal = claude.process()
+    claude.register(terminal, "s9", "term", cwd=str(tmp_path))
+    collector = Collector(claude.root, waiting_for=dict, manager=Manager(client_factory=FakeClient))
+    app = create_app(collector, "secret", poll_interval=0.05, inbox=Inbox(tmp_path / "socks"))
+    with TestClient(app, base_url="http://127.0.0.1") as client:
+        key = client.get("/api/snapshot", headers=AUTH).json()["sessions"][0]["id"]
+        assert client.post(f"/api/sessions/{key}/adopt", headers=AUTH).status_code == 204
+        assert client.get("/api/snapshot", headers=AUTH).json()["sessions"][0]["adopting"]
+        assert client.delete(f"/api/sessions/{key}/adopt", headers=AUTH).status_code == 204
+        assert not collector.manager.adopting
+
+
+def test_a_rewind_that_cannot_start_brings_the_session_back(tmp_path):
+    class Refusing(FakeClient):
+        async def connect(self):
+            if self.options.resume_session_at:
+                raise RuntimeError("Resume rejected")
+
+    async def go():
+        manager = Manager(client_factory=Refusing)
+        managed = await manager.start(str(tmp_path))
+        managed.session_id = "s1"
+        with pytest.raises(ManagerError, match="back as it was"):
+            await manager.rewind(managed.id, "p2", "line-1", files_too=False, conversation=True)
+        (back,) = manager.sessions.values()
+        assert FakeClient.made[-1].options.resume == "s1" and FakeClient.made[-1].options.resume_session_at is None
+        assert back.session_id == "s1"
+        await manager.close()
+
+    run(go)

@@ -14,9 +14,14 @@ export function task(session: Session): string {
   return session.title || session.firstPrompt || session.lastPrompt || 'no prompt yet';
 }
 
-/** Model ids read better without the vendor prefix: "opus-5-5". */
+/** Model ids as the design system writes them: "claude-opus-5-5" → "opus-5.5". */
+export function shortModel(id: string): string {
+  return id.replace(/^claude-/, '').replace(/(\d+)-(\d+)/, '$1.$2');
+}
+
 export function model(session: Session): string {
-  return session.context?.model.replace(/^claude-/, '') ?? '';
+  const id = session.model ?? session.context?.model;
+  return id ? shortModel(id) : '';
 }
 
 export function cost(usd: number | null | undefined): string | undefined {

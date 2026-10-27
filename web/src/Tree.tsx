@@ -1,9 +1,9 @@
-import { TreeFilter, TreeRow, glyph } from '@ds';
+import { KeyHints, TreeFilter, TreeRow, glyph } from '@ds';
 import { type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { api } from './api';
 import { ago, msgType } from './format';
-import type { Entry, Session, Turn } from './protocol';
+import type { Entry, LinkMessage, Session, Turn } from './protocol';
 import { numbered, store, useStore } from './store';
 
 /** Filter chips (keys 1–7) and the entry kinds each one covers. Thinking never shows in the tree. */
@@ -18,6 +18,7 @@ const CHIPS = [
 ] as const;
 type ChipType = (typeof CHIPS)[number]['type'];
 const CHIP_OF = new Map<string, ChipType>(CHIPS.flatMap((c) => c.kinds.map((k) => [k, c.type] as const)));
+const ALL_BUT_PEER = new Set<ChipType>(CHIPS.map((c) => c.type).filter((t) => t !== 'peer'));
 
 type Row =
   | { key: string; depth: 0; type: 'project'; cwd: string; name: string; count: number }
@@ -29,16 +30,41 @@ type Placed = Row & { guides: boolean[]; last: boolean; hasChildren: boolean };
 
 const turnKey = (session: string, turn: number) => `t:${session}:${turn}`;
 
+/** The glyph says slash: the label doesn't repeat it (`/compact 182k → 41k`). */
+const slashless = (entry: Entry) => ((entry.kind === 'slash' || entry.kind === 'compact') && entry.text.startsWith('/') ? entry.text.slice(1) : entry.text);
+
+function label(row: Row): string {
+  switch (row.type) {
+    case 'project':
+      return row.name;
+    case 'session':
+      return `${row.n} ${row.session.name}`;
+    case 'turn':
+      return slashless(row.turn.entry);
+    case 'entry':
+      return row.entry.kind === 'tool' ? `${row.entry.tool ?? ''} ${row.entry.detail ?? ''}` : slashless(row.entry);
+    default:
+      return '';
+  }
+}
+
 export function MessageTree() {
   const sessions = useStore((s) => s.sessions);
   const now = useStore((s) => s.now);
+  const link = useStore((s) => s.link);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [turns, setTurns] = useState<Record<string, Turn[]>>({});
   const [entries, setEntries] = useState<Record<string, Entry[]>>({});
   const [off, setOff] = useState<Set<ChipType>>(() => new Set());
   const [cursor, setCursor] = useState<string | null>(null);
+  const [search, setSearch] = useState<string | null>(null); // null: not searching
+  const [linked, setLinked] = useState<LinkMessage[] | null>(null);
   const list = useRef<VirtuosoHandle>(null);
+  const rowsBox = useRef<HTMLDivElement>(null);
+  const filterBox = useRef<HTMLDivElement>(null);
+  const searchBox = useRef<HTMLInputElement>(null);
+  const offBeforeLink = useRef<Set<ChipType> | null>(null);
 
   const loadTurns = (id: string) => api.turns(id).then((t) => setTurns((all) => ({ ...all, [id]: t })), () => {});
   const loadTurn = (id: string, turn: number) =>
@@ -61,6 +87,8 @@ export function MessageTree() {
     () =>
       store.onEntries((event) => {
         if (event.reset) return;
+        // A rewind marks old turns as left behind: the turn list says so, so refetch it.
+        if (event.entries.some((e) => e.starter && e.abandoned)) void loadTurns(event.session);
         setEntries((all) => {
           let next = all;
           for (const entry of event.entries) {
@@ -75,6 +103,36 @@ export function MessageTree() {
       }),
     [],
   );
+
+  // An edge clicked on the map: open both sessions at their messages, filtered to peer messages (design system:
+  // MessageEdge). The messages between the two are underlined; esc puts the filter back.
+  useEffect(() => {
+    if (!link) {
+      setLinked(null);
+      if (offBeforeLink.current) setOff(offBeforeLink.current);
+      offBeforeLink.current = null;
+      return;
+    }
+    offBeforeLink.current ??= off;
+    setOff(ALL_BUT_PEER);
+    let live = true;
+    void api.links(link.source, link.target).then(async (found) => {
+      if (!live) return;
+      setLinked(found);
+      const wanted = new Map<string, Set<number>>();
+      for (const m of found) wanted.set(m.session, (wanted.get(m.session) ?? new Set()).add(m.entry.turn));
+      const keys = [...wanted].flatMap(([id, set]) => [`s:${id}`, ...[...set].map((t) => turnKey(id, t))]);
+      setCollapsedProjects(new Set());
+      setExpanded((all) => new Set([...all, ...keys]));
+      await Promise.all([...wanted].flatMap(([id, set]) => [loadTurns(id), ...[...set].map((t) => loadTurn(id, t))]));
+      if (live && found[0]) setCursor(`${found[0].entry.starter ? turnKey(found[0].session, found[0].entry.turn) : `e:${found[0].entry.id}`}`);
+    }, () => {});
+    rowsBox.current?.focus();
+    return () => {
+      live = false;
+    };
+  }, [link?.source, link?.target]);
+  const linkIds = useMemo(() => new Set((linked ?? []).map((m) => m.entry.id)), [linked]);
 
   const toggle = (key: string) => {
     if (key.startsWith('p:')) {
@@ -126,6 +184,14 @@ export function MessageTree() {
     });
   }, [sessions, expanded, collapsedProjects, turns, entries]);
 
+  // / search (design system: tree keys): rows whose label has the text are underlined; n and N go through them.
+  const query = search?.trim().toLowerCase() ?? '';
+  const matches = useMemo(
+    () => (query ? rows.map((row, i) => (label(row).toLowerCase().includes(query) ? i : -1)).filter((i) => i >= 0) : []),
+    [rows, query],
+  );
+  const matched = useMemo(() => new Set(matches.map((i) => rows[i].key)), [matches, rows]);
+
   const counts = useMemo(() => {
     const total = new Map<ChipType, number>();
     for (const s of Object.values(sessions)) {
@@ -151,14 +217,34 @@ export function MessageTree() {
     setCursor(row.key);
     list.current?.scrollIntoView({ index: rows.indexOf(row) });
   };
+  // Keep a cursor set from outside (an edge's messages) in view once its row exists.
+  useEffect(() => {
+    if (cursorIndex >= 0) list.current?.scrollIntoView({ index: cursorIndex });
+  }, [cursor, cursorIndex >= 0]);
+
+  const nextMatch = (step: 1 | -1) => {
+    if (!matches.length) return;
+    const after = step === 1 ? matches.find((i) => i > cursorIndex) ?? matches[0] : [...matches].reverse().find((i) => i < cursorIndex) ?? matches.at(-1)!;
+    moveTo(after);
+  };
 
   const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const row = rows[cursorIndex];
     const digit = Number(event.key);
+    if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (digit >= 1 && digit <= CHIPS.length) setOff((set) => flip(set, CHIPS[digit - 1].type));
     else if (event.key === 'ArrowDown' || event.key === 'j') moveTo(cursorIndex + 1);
     else if (event.key === 'ArrowUp' || event.key === 'k') moveTo(cursorIndex - 1);
-    else if (!row) return;
+    else if (event.key === '/') {
+      setSearch(search ?? '');
+      requestAnimationFrame(() => searchBox.current?.focus());
+    } else if (event.key === 'f') filterBox.current?.querySelector('button')?.focus();
+    else if (event.key === 'n' && matches.length) nextMatch(1);
+    else if (event.key === 'N' && matches.length) nextMatch(-1);
+    else if (event.key === 'Escape' && (link || search !== null)) {
+      if (link) store.set({ link: null });
+      setSearch(null);
+    } else if (!row) return;
     else if (event.key === 'ArrowRight' && row.hasChildren && !isOpen(row)) toggle(row.key);
     else if (event.key === 'ArrowLeft' && row.hasChildren && isOpen(row)) toggle(row.key);
     else if (event.key === 'ArrowLeft' || event.key === 'p') moveTo(rows.findLastIndex((r, i) => i < cursorIndex && r.depth < row.depth));
@@ -179,10 +265,10 @@ export function MessageTree() {
       for (const id of ids) void loadTurns(id);
     } else if (row.type === 'session') {
       const id = row.session.id;
-      void api.turns(id).then((list) => {
-        setTurns((all) => ({ ...all, [id]: list }));
-        setExpanded((set) => new Set([...set, `s:${id}`, ...list.map((t) => turnKey(id, t.turn))]));
-        for (const t of list) void loadTurn(id, t.turn);
+      void api.turns(id).then((all) => {
+        setTurns((t) => ({ ...t, [id]: all }));
+        setExpanded((set) => new Set([...set, `s:${id}`, ...all.map((t) => turnKey(id, t.turn))]));
+        for (const t of all) void loadTurn(id, t.turn);
       }, () => {});
     } else if (row.type === 'turn' && !expanded.has(row.key)) toggle(row.key);
   };
@@ -201,19 +287,72 @@ export function MessageTree() {
 
   const isOpen = (row: Row) => (row.type === 'project' ? !collapsedProjects.has(row.key) : expanded.has(row.key));
 
-  // TreeFilter draws the chips; clicks are read from the button's position.
+  // TreeFilter draws the chips as buttons; clicks are read from the button's position.
+  const chipIndex = (target: EventTarget) => {
+    const button = (target as HTMLElement).closest('button');
+    return button ? [...button.parentElement!.querySelectorAll('button')].indexOf(button) : -1;
+  };
   const onFilterClick = (event: MouseEvent<HTMLDivElement>) => {
-    const button = (event.target as HTMLElement).closest('button');
-    const index = button ? [...button.parentElement!.querySelectorAll('button')].indexOf(button) : -1;
+    const index = chipIndex(event.target);
     if (index >= 0) setOff((set) => flip(set, CHIPS[index].type));
   };
+  // f (design system: tree keys): the chips take the keys; ← → move, space or enter toggle, 1–7 too, esc goes back.
+  const onFilterKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const buttons = [...(filterBox.current?.querySelectorAll('button') ?? [])];
+    const at = chipIndex(event.target);
+    const digit = Number(event.key);
+    if (event.key === 'ArrowRight' || event.key === 'l') buttons[Math.min(buttons.length - 1, at + 1)]?.focus();
+    else if (event.key === 'ArrowLeft' || event.key === 'h') buttons[Math.max(0, at - 1)]?.focus();
+    else if (digit >= 1 && digit <= CHIPS.length) setOff((set) => flip(set, CHIPS[digit - 1].type));
+    else if (event.key === 'Escape' || event.key === 'f' || event.key === 'ArrowDown') rowsBox.current?.focus();
+    else return; // space and enter click the button
+    event.preventDefault();
+    event.stopPropagation();
+  };
 
+  const linkNames = link ? [link.source, link.target].map((id) => sessions[id]?.name ?? id.replace(/^endpoint:/, '')) : null;
   return (
     <div className="tree">
-      <div onClick={onFilterClick}>
+      <div ref={filterBox} onClick={onFilterClick} onKeyDown={onFilterKey}>
         <TreeFilter chips={CHIPS.map((c) => ({ type: c.type, count: counts.get(c.type) ?? 0, on: !off.has(c.type) }))} />
       </div>
-      <div className="cn-tree tree__rows" role="tree" tabIndex={0} onKeyDown={onKey} aria-label="message tree">
+      {linkNames ? (
+        <div className="tree-bar">
+          <span className="cn-msg--sent">{glyph('message', 'sent')}{glyph('message', 'received')}</span>
+          <span className="cn-ellipsis">
+            {linkNames[0]} <span className="cn-dim">and</span> {linkNames[1]}
+          </span>
+          <span className="cn-dim">{linked ? `${linked.length} message${linked.length === 1 ? '' : 's'}` : glyph('misc', 'ellipsis')}</span>
+          <span className="cn-fill" />
+          <KeyHints keys={[['esc', 'back']]} />
+        </div>
+      ) : null}
+      {search !== null ? (
+        <div className="tree-bar">
+          <span className="cn-b">/</span>
+          <input
+            ref={searchBox}
+            className="tree-bar__input"
+            value={search}
+            spellCheck={false}
+            aria-label="search the tree"
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                nextMatch(1);
+                rowsBox.current?.focus();
+              } else if (event.key === 'Escape') {
+                setSearch(null);
+                rowsBox.current?.focus();
+              } else return;
+              event.preventDefault();
+            }}
+          />
+          <span className="cn-dim">{query ? matches.length : ''}</span>
+          <KeyHints keys={[['n', 'next'], ['esc', 'clear']]} />
+        </div>
+      ) : null}
+      <div className="cn-tree tree__rows" role="tree" tabIndex={0} ref={rowsBox} onKeyDown={onKey} aria-label="message tree">
         <Virtuoso
           ref={list}
           data={rows}
@@ -226,7 +365,16 @@ export function MessageTree() {
                 if (row.hasChildren) toggle(row.key);
               }}
             >
-              <TreeRowFor row={row} expanded={isOpen(row)} cursor={row.key === cursor} off={off} now={now} onActivate={() => activate(row)} />
+              <TreeRowFor
+                row={row}
+                expanded={isOpen(row)}
+                cursor={row.key === cursor}
+                off={off}
+                match={matched.has(row.key) || (row.type === 'entry' && linkIds.has(row.entry.id)) || (row.type === 'turn' && linkIds.has(row.turn.entry.id))}
+                outsideLink={!!link && (row.type === 'entry' || row.type === 'turn') && !linkIds.has(row.type === 'entry' ? row.entry.id : row.turn.entry.id)}
+                now={now}
+                onActivate={() => activate(row)}
+              />
             </div>
           )}
         />
@@ -235,8 +383,18 @@ export function MessageTree() {
   );
 }
 
-function TreeRowFor({ row, expanded, cursor, off, now, onActivate }: { row: Placed; expanded: boolean; cursor: boolean; off: Set<ChipType>; now: number; onActivate: () => void }) {
-  const common = { depth: row.depth, guides: row.guides, last: row.last, hasChildren: row.hasChildren, expanded, cursor, onActivate };
+function TreeRowFor({ row, expanded, cursor, off, match, outsideLink, now, onActivate }: {
+  row: Placed;
+  expanded: boolean;
+  cursor: boolean;
+  off: Set<ChipType>;
+  match: boolean;
+  /** An edge's messages are open: rows that aren't one of them are kept for context. */
+  outsideLink: boolean;
+  now: number;
+  onActivate: () => void;
+}) {
+  const common = { depth: row.depth, guides: row.guides, last: row.last, hasChildren: row.hasChildren, expanded, cursor, match, onActivate };
   switch (row.type) {
     case 'project':
       return <TreeRow {...common} kind="project" label={row.name} meta={row.count} />;
@@ -248,19 +406,21 @@ function TreeRowFor({ row, expanded, cursor, off, now, onActivate }: { row: Plac
       );
     }
     case 'turn': {
-      const entry = row.turn.entry;
+      const { entry, abandoned } = row.turn;
+      // A turn a rewind left behind stays in time order, kept for context and marked (roadmap 2.10).
       return (
-        <TreeRow {...common} kind={msgType(entry.kind)} turn={row.turn.turn} label={entry.text} meta={ago(Date.parse(entry.at ?? ''), now)}
-          attention={row.turn.attention} dimmed={off.has(CHIP_OF.get(entry.kind) ?? 'reply')} />
+        <TreeRow {...common} kind={msgType(entry.kind)} turn={row.turn.turn} label={slashless(entry)}
+          meta={abandoned ? 'rewound' : ago(Date.parse(entry.at ?? ''), now)}
+          attention={row.turn.attention && !abandoned}
+          dimmed={abandoned || outsideLink || off.has(CHIP_OF.get(entry.kind) ?? 'reply')} />
       );
     }
     case 'entry': {
       const entry = row.entry;
-      const label = entry.kind === 'tool' ? `${entry.tool ?? ''} ${entry.detail ?? ''}` : entry.text;
       return (
-        <TreeRow {...common} kind={msgType(entry.kind)} label={label} meta={ago(Date.parse(entry.at ?? ''), now)}
-          attention={entry.kind === 'question' && entry.resultPreview == null}
-          dimmed={off.has(CHIP_OF.get(entry.kind) ?? 'reply')} />
+        <TreeRow {...common} kind={msgType(entry.kind)} label={label(row)} meta={ago(Date.parse(entry.at ?? ''), now)}
+          attention={entry.kind === 'question' && entry.resultPreview == null && !entry.abandoned}
+          dimmed={entry.abandoned || outsideLink || off.has(CHIP_OF.get(entry.kind) ?? 'reply')} />
       );
     }
     default:

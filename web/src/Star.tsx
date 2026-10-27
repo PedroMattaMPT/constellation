@@ -15,7 +15,19 @@ import type { ComponentProps } from 'react';
 import { ago, task } from './format';
 import type { Session, Subagent } from './protocol';
 
-export type NodeData = { session: Session; n: number; subagents: Subagent[]; focused: boolean; now: number };
+export type NodeData = {
+  session: Session;
+  n: number;
+  subagents: Subagent[];
+  /** The map's cursor is on it. */
+  focused: boolean;
+  /** Picked with space, for sending one prompt to several. */
+  selected: boolean;
+  compact: boolean;
+  /** Model-written, only after you asked (s). */
+  summary: string | null;
+  now: number;
+};
 export type EndpointData = { name: string };
 
 /** The star's center inside its node: left of the label, level with the name row. */
@@ -48,8 +60,11 @@ export function trim(sx: number, sy: number, tx: number, ty: number, rs: number,
 export const step = (s: Session) => (s.status === 'waiting' && s.waitingFor ? `waiting: ${s.waitingFor}` : (s.step ?? ''));
 
 /** What the design system's SessionNode card takes, from a session. */
-export function sessionNodeProps({ session: s, n, subagents, focused, now }: NodeData) {
+export function sessionNodeProps({ session: s, n, subagents, focused, selected, compact, summary, now }: NodeData) {
   return {
+    selected,
+    compact,
+    summary: summary ?? undefined,
     index: n,
     name: s.name,
     project: s.project,
@@ -110,38 +125,50 @@ function StarMark({ session, moons, focused }: { session: Session; moons: Subage
 
 /** A session as a star: the mark, then name, status, mode, branch, context and latest step. Hover shows its card. */
 export function StarNode({ data }: NodeProps<Node<NodeData, 'star'>>) {
-  const { session: s, n, subagents, focused, now } = data;
+  const { session: s, n, subagents, focused, selected, compact, summary, now } = data;
   const pct = s.context?.percent;
   const latest = step(s) || task(s);
   return (
-    <div className="star">
+    <div className={`star${selected ? ' star--selected' : ''}`}>
       <StarHandles />
       <StarMark session={s} moons={subagents} focused={focused} />
       <div className="star__label">
         <div className="star__row">
+          {selected ? <span className="star__check">{glyph('misc', 'check_on')}</span> : null}
           <span className={focused ? 'star__index star__index--focused' : 'star__index cn-dim'}>{n}</span>
           <span className="star__name">{s.name}</span>
           <KindMark kind={s.kind} />
           {s.kind === 'external' ? <span className="cn-tag">ext</span> : null}
-          <StatusBadge status={s.status} age={ago(s.lastActivityAt, now)} />
+          <StatusBadge status={s.status} age={ago(s.lastActivityAt, now)} compact={compact} />
+          {compact ? <ModeBadge mode={s.mode ?? 'default'} compact /> : null}
         </div>
-        <div className="star__row">
-          <ModeBadge mode={s.mode ?? 'default'} />
-          {pct != null ? <ContextBar value={Math.round(pct)} max={s.context?.windowTokens ?? undefined} cells={6} /> : null}
-        </div>
-        <div className={`star__row${s.status === 'error' ? ' cn-status--error' : ''}`}>
-          {s.status === 'working' ? (
-            <Spinner />
-          ) : s.status === 'error' ? (
-            <span>{glyph('status', 'error')}</span>
-          ) : (
-            <span className="cn-dim">{glyph('message', 'prompt')}</span>
-          )}
-          <span className={`cn-ellipsis star__step star__step--${s.status}`} title={latest}>{latest}</span>
-        </div>
+        {compact ? null : (
+          <>
+            <div className="star__row">
+              <ModeBadge mode={s.mode ?? 'default'} />
+              {pct != null ? <ContextBar value={Math.round(pct)} max={s.context?.windowTokens ?? undefined} cells={6} /> : null}
+            </div>
+            <div className={`star__row${s.status === 'error' ? ' cn-status--error' : ''}`}>
+              {s.status === 'working' ? (
+                <Spinner />
+              ) : s.status === 'error' ? (
+                <span>{glyph('status', 'error')}</span>
+              ) : (
+                <span className="cn-dim">{glyph('message', 'prompt')}</span>
+              )}
+              <span className={`cn-ellipsis star__step star__step--${s.status}`} title={latest}>{latest}</span>
+            </div>
+            {summary ? (
+              <div className="star__row star__summary" title="model-written summary">
+                <span className="cn-dim">summary</span>
+                <span className="cn-ellipsis">{summary}</span>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
       <div className="star__card">
-        <SessionNode {...sessionNodeProps({ ...data, focused: false })} />
+        <SessionNode {...sessionNodeProps({ ...data, focused: false, compact: false })} />
       </div>
     </div>
   );

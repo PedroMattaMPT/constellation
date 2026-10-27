@@ -1,4 +1,8 @@
-import type { AnswerRequest, EntryContent, EntryPage, Event, ImageInput, Queued, StartRequest, Started, Turn } from './protocol';
+import type {
+  AnswerRequest, ContextUsage, Effort, EntryContent, EntryPage, Event, HookStatus, ImageInput, LinkMessage, McpServer,
+  Mode, ModelInfo, PastSession, Queued, RewindPreview, RewindRequest, SessionOptions, SessionPreview, StartRequest,
+  Started, Turn,
+} from './protocol';
 
 const TOKEN_KEY = 'constellation.token';
 
@@ -66,6 +70,9 @@ export interface PageQuery {
 }
 
 const session = (id: string) => `/api/sessions/${encodeURIComponent(id)}`;
+const past = (id: string) => `/api/history/${encodeURIComponent(id)}`;
+const query = (params: Record<string, string | null | undefined>) =>
+  new URLSearchParams(Object.entries(params).filter((p): p is [string, string] => p[1] != null)).toString();
 
 export const api = {
   turns: (id: string) => get<Turn[]>(`${session(id)}/turns`),
@@ -84,7 +91,40 @@ export const api = {
   stop: (id: string) => send('POST', `${session(id)}/stop`),
   answer: (id: string, requestId: string, answer: AnswerRequest) =>
     send('POST', `${session(id)}/pending/${encodeURIComponent(requestId)}`, answer),
+  // Commands, model, mode, context, MCP
+  models: () => get<ModelInfo[]>('/api/models'),
+  options: (id: string) => get<SessionOptions>(`${session(id)}/options`),
+  setModel: (id: string, model: string) => send('POST', `${session(id)}/model`, { model }),
+  setEffort: (id: string, effort: Effort) => send<Queued>('POST', `${session(id)}/effort`, { effort }),
+  setMode: (id: string, mode: Mode, confirm: string | null = null) => send('POST', `${session(id)}/mode`, { mode, confirm }),
+  context: (id: string) => get<ContextUsage>(`${session(id)}/context`),
+  mcp: (id: string) => get<McpServer[]>(`${session(id)}/mcp`),
+  mcpReconnect: (id: string, server: string) => send<McpServer[]>('POST', `${session(id)}/mcp/${encodeURIComponent(server)}/reconnect`),
+  mcpToggle: (id: string, server: string, enabled: boolean) =>
+    send<McpServer[]>('POST', `${session(id)}/mcp/${encodeURIComponent(server)}/toggle`, { enabled }),
+  // History
+  fork: (id: string, name: string | null = null) => send<Started>('POST', `${session(id)}/fork`, { name }),
+  rewindPreview: (id: string, entry: string) => get<RewindPreview>(`${session(id)}/rewind/${encodeURIComponent(entry)}`),
+  rewind: (id: string, request: RewindRequest) => send<Started>('POST', `${session(id)}/rewind`, request),
+  history: (search = '') => get<PastSession[]>(`/api/history?${query({ query: search })}`),
+  preview: (sessionId: string, cwd?: string | null) => get<SessionPreview>(`${past(sessionId)}?${query({ cwd })}`),
+  resume: (sessionId: string, fork = false, name: string | null = null) => send<Started>('POST', `${past(sessionId)}/resume`, { fork, name }),
+  tag: (sessionId: string, tag: string | null) => send('POST', `${past(sessionId)}/tag`, { tag }),
+  // Sessions you didn't start
+  message: (id: string, text: string) => send('POST', `${session(id)}/message`, { text }),
+  adopt: (id: string) => send('POST', `${session(id)}/adopt`),
+  cancelAdopt: (id: string) => send('DELETE', `${session(id)}/adopt`),
+  terminal: (id: string) => send('POST', `${session(id)}/terminal`),
+  hooks: () => get<HookStatus>('/api/hooks'),
+  installHooks: () => send<HookStatus>('POST', '/api/hooks'),
+  removeHooks: () => send<HookStatus>('DELETE', '/api/hooks'),
+  // Map
+  summary: (id: string) => send('POST', `${session(id)}/summary`),
+  links: (source: string, target: string) => get<LinkMessage[]>(`/api/links?${query({ source, target })}`),
 };
+
+/** The server's reason for a refusal, for an error line. */
+export const reason = (error: unknown, fallback = 'server unreachable') => (error instanceof Error ? error.message : fallback);
 
 export type Connection = 'connecting' | 'live' | 'offline' | 'unauthorized';
 

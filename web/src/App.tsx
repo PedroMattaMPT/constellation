@@ -3,9 +3,11 @@ import { type MouseEvent, type PointerEvent, useEffect, useMemo, useRef, useStat
 import { Boundary } from './Boundary';
 import { Conversation } from './Conversation';
 import { Launcher, StopDialog } from './Dialogs';
-import { ago } from './format';
+import { ago, task } from './format';
 import { HideButton } from './Hide';
 import { SessionMap } from './Map';
+import { AdoptDialog, ClearDialog, ContextCard, HooksDialog, McpPicker, ModeMenu, ModelDialog, ResumeDialog, RewindDialog } from './Pickers';
+import { step } from './Star';
 import { numbered, store, useStore } from './store';
 import { MessageTree } from './Tree';
 
@@ -71,18 +73,47 @@ function Bar({ prefix }: { prefix: boolean }) {
   const focused = useStore((s) => s.focused);
   const now = useStore((s) => s.now);
   const items = useMemo(() => numbered(sessions), [sessions]);
+  const [tip, setTip] = useState<{ n: number; left: number } | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
 
-  // StatusBar draws plain spans; find the clicked session by the number it shows.
-  const onClick = (event: MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    const entry = target.closest('.cn-bar__s, .cn-bar__sessions .cn-chip--waiting');
+  // StatusBar draws plain spans; find the session under the pointer by the number it shows.
+  const hit = (target: EventTarget) => {
+    const entry = (target as HTMLElement).closest('.cn-bar__s, .cn-bar__sessions .cn-chip--waiting');
     const number = entry?.querySelector('.cn-bar__n')?.textContent ?? entry?.textContent?.match(/^\d+/)?.[0];
-    const hit = items.find((x) => String(x.n) === number);
-    if (hit) store.focus(hit.session.id);
+    const found = items.find((x) => String(x.n) === number);
+    return found && entry ? { found, entry } : null;
   };
+  const onClick = (event: MouseEvent<HTMLDivElement>) => {
+    const found = hit(event.target)?.found;
+    if (found) store.focus(found.session.id);
+  };
+  // Hovering a session shows its task and latest step (design system: web layout); the bar's own titles stay out.
+  const onOver = (event: MouseEvent<HTMLDivElement>) => {
+    const over = hit(event.target);
+    if (!over) return setTip(null);
+    const box = over.entry.getBoundingClientRect();
+    setTip({ n: over.found.n, left: Math.max(8, Math.min(box.left, window.innerWidth - 480)) });
+  };
+  useEffect(() => {
+    bar.current?.querySelectorAll('.cn-bar__sessions [title]').forEach((el) => el.removeAttribute('title'));
+  });
+  const shown = tip ? items.find((x) => x.n === tip.n)?.session : null;
 
   return (
-    <div className="app__bar" onClick={onClick}>
+    <div className="app__bar" ref={bar} onClick={onClick} onMouseOver={onOver} onMouseLeave={() => setTip(null)}>
+      {shown && tip ? (
+        <div className="bar-tip" style={{ left: tip.left }} role="tooltip">
+          <span className="cn-b">{tip.n} {shown.name}</span>
+          <StatusBadge status={shown.status} compact />
+          <span className="cn-ellipsis">{task(shown)}</span>
+          {step(shown) ? (
+            <>
+              <span className="cn-sep">{glyph('misc', 'separator')}</span>
+              <span className="cn-dim cn-ellipsis">{step(shown)}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <StatusBar
         windows={[{ n: 0, name: 'map', active: true }]}
         sessions={items.map(({ n, session }) => ({ n, name: session.name, status: session.status, current: session.id === focused }))}
@@ -98,6 +129,24 @@ function Bar({ prefix }: { prefix: boolean }) {
 function forFocused(act: (id: string) => void) {
   const { focused, sessions } = store.state;
   if (focused && sessions[focused]?.kind === 'managed') act(focused);
+}
+
+/** A for adopt (design system): on the focused external session, when no field or dialog has the keys. */
+function useAdoptKey() {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'A' || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, [role="dialog"], [role="alertdialog"], .picker, .dialog-keys') || store.state.dialog) return;
+      const { focused, sessions } = store.state;
+      if (focused && sessions[focused]?.kind === 'external') {
+        event.preventDefault();
+        store.set({ dialog: { kind: 'adopt', session: focused } });
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 }
 
 /** The prefix (design system: C-Space, then one key). The rest of the bindings come with panes (5.1). */
@@ -123,6 +172,8 @@ function usePrefix(): boolean {
       if (event.key === 't') store.toggle('tree');
       else if (event.key === 'x') store.toggle('pane');
       else if (event.key === 'c') store.set({ dialog: { kind: 'launcher' } });
+      else if (event.key === 'r') store.set({ dialog: { kind: 'resume' } });
+      else if (event.key === '0') store.set({ mapFocus: Date.now() });
       else if (event.key === 'a') store.attend();
       else if (event.key === '&') forFocused((id) => store.set({ dialog: { kind: 'stop', session: id } }));
       else if (event.key === ',') forFocused((id) => store.set({ renaming: id }));
@@ -157,13 +208,49 @@ function PaneBar({ id }: { id: string | null }) {
   );
 }
 
-/** Floating layer (design system): dialogs open centered over the panes, never full screen. */
+/** Floating layer (design system): menus, pickers and dialogs open centered over the panes, never full screen. */
 function Layer() {
   const dialog = useStore((s) => s.dialog);
   if (!dialog) return null;
+  let content;
+  switch (dialog.kind) {
+    case 'launcher':
+      content = <Launcher />;
+      break;
+    case 'resume':
+      content = <ResumeDialog />;
+      break;
+    case 'hooks':
+      content = <HooksDialog />;
+      break;
+    case 'stop':
+      content = <StopDialog id={dialog.session} />;
+      break;
+    case 'model':
+      content = <ModelDialog id={dialog.session} />;
+      break;
+    case 'mode':
+      content = <ModeMenu id={dialog.session} />;
+      break;
+    case 'context':
+      content = <ContextCard id={dialog.session} />;
+      break;
+    case 'mcp':
+      content = <McpPicker id={dialog.session} />;
+      break;
+    case 'rewind':
+      content = <RewindDialog id={dialog.session} />;
+      break;
+    case 'adopt':
+      content = <AdoptDialog id={dialog.session} />;
+      break;
+    case 'clear':
+      content = <ClearDialog id={dialog.session} />;
+      break;
+  }
   return (
     <div className="layer" onMouseDown={(event) => event.target === event.currentTarget && store.set({ dialog: null })}>
-      {dialog.kind === 'launcher' ? <Launcher /> : <StopDialog id={dialog.session} />}
+      {content}
     </div>
   );
 }
@@ -173,6 +260,7 @@ export function App() {
   const hidden = useStore((s) => s.hidden);
   const [sizes, setSizes] = useState(loadSizes);
   const prefix = usePrefix();
+  useAdoptKey();
 
   useEffect(() => store.start(), []);
 

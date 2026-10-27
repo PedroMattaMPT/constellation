@@ -14,6 +14,23 @@ export interface Protocol {
   queued: Queued;
   renameRequest: RenameRequest;
   answerRequest: AnswerRequest;
+  linkMessages: LinkMessage[];
+  sessionOptions: SessionOptions;
+  modelRequest: ModelRequest;
+  effortRequest: EffortRequest;
+  modeRequest: ModeRequest;
+  contextUsage: ContextUsage;
+  mcpServers: McpServer[];
+  toggleRequest: ToggleRequest;
+  pastSessions: PastSession[];
+  sessionPreview: SessionPreview;
+  resumeRequest: ResumeRequest;
+  forkRequest: ForkRequest;
+  tagRequest: TagRequest;
+  rewindPreview: RewindPreview;
+  rewindRequest: RewindRequest;
+  messageRequest: MessageRequest;
+  hookStatus: HookStatus;
 }
 export interface SnapshotEvent {
   type: "snapshot";
@@ -94,13 +111,34 @@ export interface Session {
   compactions: number;
   transcriptExists: boolean;
   /**
+   * The model in use: from the SDK when managed, else the last reply.
+   */
+  model: string | null;
+  /**
+   * Model-written one-liner, only after you ask for one.
+   */
+  summary: string | null;
+  summaryAt: number | null;
+  /**
+   * It has an inbox socket Constellation can send a peer message to.
+   */
+  inbox: boolean;
+  /**
+   * Constellation resumes it here as soon as its terminal copy exits.
+   */
+  adopting: boolean;
+  /**
+   * The node this one took over from: adopted, or restarted to rewind.
+   */
+  replaces: string | null;
+  /**
+   * Waiting for your answer: from the SDK (managed) or the hooks (terminal).
+   */
+  pending: PendingRequest[];
+  /**
    * Prompts waiting for the current turn to end.
    */
   queued: string[];
-  /**
-   * Waiting for your answer.
-   */
-  pending: PendingRequest[];
   /**
    * What Claude Code is busy with besides a turn: 'compacting'.
    */
@@ -109,6 +147,11 @@ export interface Session {
    * How the last turn failed, if it did.
    */
   error: string | null;
+  /**
+   * Set through Constellation; until then your settings' effort applies.
+   */
+  effort: string | null;
+  mcp: McpSummary | null;
 }
 export interface Context {
   model: string;
@@ -117,7 +160,7 @@ export interface Context {
   percent: number | null;
 }
 /**
- * A question, permission prompt or plan approval a managed session is waiting on.
+ * A question, permission prompt or plan approval a session is waiting on.
  */
 export interface PendingRequest {
   id: string;
@@ -137,6 +180,15 @@ export interface PendingRequest {
    * Unix ms.
    */
   at: number;
+  /**
+   * sdk: a managed session's, answered here. hook, transcript: a terminal session's, answered there.
+   */
+  source: "sdk" | "hook" | "transcript";
+}
+export interface McpSummary {
+  connected: number;
+  failed: number;
+  total: number;
 }
 export interface Edge {
   id: string;
@@ -244,6 +296,10 @@ export interface Entry {
    * The transcript this entry is in.
    */
   sessionId: string;
+  /**
+   * On a branch a rewind left: not part of the conversation any more.
+   */
+  abandoned: boolean;
 }
 export interface GraphEvent {
   type: "graph";
@@ -277,6 +333,7 @@ export interface Turn {
   entry: Entry;
   entries: number;
   attention: boolean;
+  abandoned: boolean;
 }
 /**
  * Start a managed session. No mode: your own default mode applies.
@@ -286,6 +343,10 @@ export interface StartRequest {
   model: string | null;
   mode: ("default" | "plan" | "acceptEdits" | "auto" | "bypassPermissions" | "dontAsk") | null;
   name: string | null;
+  /**
+   * Bypass only: the folder's name, typed back.
+   */
+  confirm: string | null;
 }
 export interface Started {
   id: string;
@@ -526,4 +587,191 @@ export interface AnswerRequest {
    * Allow and remember: add Claude Code's suggested allow rule.
    */
   remember: boolean;
+  /**
+   * Plan approval: the mode to work in afterwards, such as acceptEdits.
+   */
+  mode: ("default" | "plan" | "acceptEdits" | "auto" | "bypassPermissions" | "dontAsk") | null;
+}
+/**
+ * A message between two sessions, as one of them recorded it.
+ */
+export interface LinkMessage {
+  /**
+   * Node id of the session whose transcript has it.
+   */
+  session: string;
+  entry: Entry;
+}
+/**
+ * What a managed session's / menu and model picker offer (from get_server_info).
+ */
+export interface SessionOptions {
+  commands: CommandInfo[];
+  models: ModelInfo[];
+  model: string | null;
+  /**
+   * Set through Constellation, else the effortLevel in your settings.
+   */
+  effort: string | null;
+}
+export interface CommandInfo {
+  name: string;
+  description: string;
+  argumentHint: string;
+  source: "built-in" | "skill" | "command" | "mcp" | "plugin";
+  aliases: string[];
+  /**
+   * Why it can't run here: 'terminal-only'.
+   */
+  unavailable: string | null;
+}
+export interface ModelInfo {
+  /**
+   * What set_model takes: an alias ('opus') or a model id.
+   */
+  value: string;
+  name: string;
+  description: string;
+  /**
+   * The model id the alias resolves to.
+   */
+  model: string | null;
+  efforts: string[];
+}
+export interface ModelRequest {
+  model: string;
+}
+export interface EffortRequest {
+  effort: "low" | "medium" | "high" | "xhigh" | "max";
+}
+export interface ModeRequest {
+  mode: "default" | "plan" | "acceptEdits" | "auto" | "bypassPermissions" | "dontAsk";
+  /**
+   * Bypass only: the session's name, the second key that names it.
+   */
+  confirm: string | null;
+}
+/**
+ * The /context breakdown (get_context_usage).
+ */
+export interface ContextUsage {
+  model: string;
+  totalTokens: number;
+  maxTokens: number;
+  percent: number;
+  autoCompact: boolean;
+  /**
+   * Where auto-compact fires, as a share of the window.
+   */
+  compactAt: number | null;
+  categories: ContextCategory[];
+  memoryFiles: MemoryFile[];
+}
+export interface ContextCategory {
+  id: string;
+  name: string;
+  tokens: number;
+  /**
+   * used, deferred (not in the window yet), buffer or free.
+   */
+  kind: string;
+}
+export interface MemoryFile {
+  path: string;
+  tokens: number;
+}
+export interface McpServer {
+  name: string;
+  status: "connected" | "failed" | "needs-auth" | "pending" | "disabled";
+  tools: number;
+  error: string | null;
+  scope: string | null;
+}
+export interface ToggleRequest {
+  enabled: boolean;
+}
+/**
+ * A session in the resume picker (list_sessions).
+ */
+export interface PastSession {
+  sessionId: string;
+  name: string;
+  project: string;
+  cwd: string | null;
+  /**
+   * Unix ms.
+   */
+  modified: number;
+  tag: string | null;
+  firstPrompt: string | null;
+  branch: string | null;
+  /**
+   * Node id, when a live process has this session open.
+   */
+  running: string | null;
+}
+export interface SessionPreview {
+  sessionId: string;
+  turns: number;
+  /**
+   * The last few prompts and replies.
+   */
+  lines: PreviewLine[];
+  /**
+   * A huge transcript: only its end was read, so turns is a floor.
+   */
+  partial: boolean;
+}
+export interface PreviewLine {
+  kind: "prompt" | "reply";
+  text: string;
+}
+export interface ResumeRequest {
+  fork: boolean;
+  name: string | null;
+}
+export interface ForkRequest {
+  name: string | null;
+}
+export interface TagRequest {
+  tag: string | null;
+}
+/**
+ * What rewinding to a prompt restores: the files edited since, and which are outside the project.
+ */
+export interface RewindPreview {
+  files: string[];
+  outside: string[];
+  /**
+   * Turns that rewinding the conversation drops.
+   */
+  turns: number;
+}
+/**
+ * Rewind to just before a prompt: its files, its conversation, or both.
+ */
+export interface RewindRequest {
+  /**
+   * The prompt's entry id.
+   */
+  entry: string;
+  files: boolean;
+  conversation: boolean;
+}
+/**
+ * A peer message to a session Constellation didn't start.
+ */
+export interface MessageRequest {
+  text: string;
+}
+export interface HookStatus {
+  installed: boolean;
+  /**
+   * The settings file the hooks go in.
+   */
+  settings: string;
+  /**
+   * The hook script.
+   */
+  script: string;
 }

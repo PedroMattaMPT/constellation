@@ -18,8 +18,9 @@ def serve(args: argparse.Namespace) -> None:
 
     from .app import create_app
     from .collector import Collector
-    from .manager import Manager
+    from .manager import Manager, leave_parent_session
 
+    leave_parent_session()  # started from inside a Claude Code session: its sessions mustn't look like its children
     token = args.token or os.environ.get("CONSTELLATION_TOKEN") or secrets.token_urlsafe(24)
     collector = Collector(manager=Manager())
     started = time.time()
@@ -27,7 +28,8 @@ def serve(args: argparse.Namespace) -> None:
     print(f"watching {len(collector.nodes)} sessions (read in {time.time() - started:.1f}s)")
     base = args.ui or f"http://{args.host}:{args.port}"
     print(f"open {base}/?token={token}", flush=True)
-    app = create_app(collector, token, None if args.ui else WEB_DIST, poll_interval=args.poll)
+    url = f"http://{args.host}:{args.port}"
+    app = create_app(collector, token, None if args.ui else WEB_DIST, poll_interval=args.poll, url=url)
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 

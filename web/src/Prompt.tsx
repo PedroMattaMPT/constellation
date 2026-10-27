@@ -1,11 +1,17 @@
-import { KeyHints, glyph } from '@ds';
-import { type ClipboardEvent, type DragEvent, type KeyboardEvent, useState } from 'react';
-import { api } from './api';
-import type { ImageInput } from './protocol';
+import { CommandMenu, KeyHints, glyph } from '@ds';
+import { type ClipboardEvent, type DragEvent, type KeyboardEvent, type MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { api, reason } from './api';
+import type { CommandInfo, Effort, ImageInput, Mode, Session } from './protocol';
+import { store, useStore } from './store';
 
 const MAX_LINES = 6; // design system: the prompt box grows from 1 to 6 lines
 const MAX_IMAGE = 5 * 1024 * 1024; // the API's limit per image
 const IMAGE_TYPES: ReadonlyArray<string> = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const MENU_ROWS = 8;
+const ESC_ESC_MS = 400;
+// S-Tab (design system): default → edits → plan → auto. Bypass and no-ask are never in the cycle.
+const CYCLE: Mode[] = ['default', 'acceptEdits', 'plan', 'auto'];
+const EFFORTS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 interface Attached {
   name: string;
@@ -28,16 +34,118 @@ function readImage(file: File): Promise<Attached> {
   });
 }
 
+/** How often each command was run from this page, per session: the menu's second ranking key. */
+const used = new Map<string, Map<string, number>>();
+
+function count(session: string, line: string) {
+  const name = /^\/(\S+)/.exec(line.trim())?.[1];
+  if (!name) return;
+  const counts = used.get(session) ?? new Map<string, number>();
+  counts.set(name, (counts.get(name) ?? 0) + 1);
+  used.set(session, counts);
+}
+
+/** The design system's ranking: prefix matches first, then how often you ran it in this session, then by name. */
+function rank(commands: CommandInfo[], query: string, session: string): CommandInfo[] {
+  const q = query.toLowerCase();
+  const counts = used.get(session);
+  const score = (c: CommandInfo) => {
+    const name = c.name.toLowerCase();
+    if (name.startsWith(q) || c.aliases.some((a) => a.toLowerCase().startsWith(q))) return 0;
+    return name.includes(q) ? 1 : 2;
+  };
+  const often = (c: CommandInfo) => counts?.get(c.name) ?? 0;
+  return commands
+    .filter((c) => score(c) < 2)
+    .sort((a, b) => score(a) - score(b) || often(b) - often(a) || a.name.localeCompare(b.name));
+}
+
 /**
- * The design system's PromptBox, typed into: enter sends (or queues while a turn runs), M-enter or S-enter
- * adds a line, esc interrupts. Pasted or dropped images become chips and go out with the prompt.
+ * Commands Constellation draws itself (design system: Claude Code features). Returns true when it handled the line;
+ * anything else goes to the session as a prompt.
  */
-export function PromptInput({ session, running }: { session: string; running: boolean }) {
+function native(session: Session, line: string): boolean | Promise<unknown> {
+  const [command, ...rest] = line.trim().slice(1).split(/\s+/);
+  const arg = rest.join(' ');
+  const open = (kind: 'model' | 'context' | 'mcp' | 'rewind' | 'clear') => store.set({ dialog: { kind, session: session.id } });
+  switch (command) {
+    case 'model':
+      if (arg) return api.setModel(session.id, arg);
+      open('model');
+      return true;
+    case 'effort':
+      return EFFORTS.includes(arg as Effort) ? api.setEffort(session.id, arg as Effort) : false;
+    case 'context':
+      open('context');
+      return true;
+    case 'mcp':
+      if (arg) return false; // /mcp reconnect x: Claude Code's own
+      open('mcp');
+      return true;
+    case 'rewind':
+      open('rewind');
+      return true;
+    case 'resume':
+      store.set({ dialog: { kind: 'resume' } });
+      return true;
+    case 'clear':
+    case 'reset':
+    case 'new':
+      if (!session.pending.length) return false;
+      open('clear');
+      return true;
+    case 'fork':
+      return api.fork(session.id, arg || null).then(({ id }) => store.focus(id));
+    case 'rename':
+      if (arg) return false;
+      store.set({ renaming: session.id });
+      return true;
+    default:
+      return false;
+  }
+}
+
+/**
+ * The design system's PromptBox, typed into. Managed: enter sends (or queues while a turn runs), M-enter or S-enter
+ * adds a line, esc interrupts, esc esc rewinds, S-Tab cycles the mode, and / opens the command menu docked above.
+ * Pasted or dropped images become chips. External: what you type goes to the session as a peer message.
+ */
+export function PromptInput({ session }: { session: Session }) {
+  const external = session.kind === 'external';
+  const running = session.status === 'working';
+  const draft = useStore((s) => (s.draft?.session === session.id ? s.draft : null));
   const [value, setValue] = useState('');
   const [images, setImages] = useState<Attached[]>([]);
   const [focused, setFocused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [commands, setCommands] = useState<CommandInfo[] | null>(null);
+  const [highlighted, setHighlighted] = useState(0);
+  const [menuClosed, setMenuClosed] = useState(false);
+  const lastEsc = useRef(0);
+  const field = useRef<HTMLTextAreaElement>(null);
+
+  // A rewind put the prompt you went back to here, to edit and send again.
+  useEffect(() => {
+    if (!draft) return;
+    setValue(draft.text);
+    store.set({ draft: null });
+    field.current?.focus();
+  }, [draft?.nonce]);
+
+  // The / menu: while the line is a command name with nothing after it yet.
+  const query = /^\/(\S*)$/.exec(value)?.[1] ?? null;
+  const menuOpen = query !== null && !menuClosed && focused;
+  useEffect(() => {
+    if (menuOpen && !external && commands === null) api.options(session.id).then((o) => setCommands(o.commands), () => setCommands([]));
+  }, [menuOpen]);
+  useEffect(() => {
+    setHighlighted(0);
+    if (query === null) setMenuClosed(false);
+  }, [query]);
+  const matches = useMemo(() => (query === null || !commands ? [] : rank(commands, query, session.id)), [commands, query, session.id]);
+  const top = Math.max(0, Math.min(highlighted - MENU_ROWS + 1, matches.length - MENU_ROWS));
+  const shown = matches.slice(top, top + MENU_ROWS);
 
   const attach = async (files: File[]) => {
     const accepted = files.filter((file) => IMAGE_TYPES.includes(file.type));
@@ -50,44 +158,99 @@ export function PromptInput({ session, running }: { session: string; running: bo
       const read = await Promise.all(accepted.map(readImage));
       setImages((current) => [...current, ...read]);
       setError(null);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'could not read the image');
+    } catch (failure) {
+      setError(reason(failure, 'could not read the image'));
     }
   };
 
-  const submit = async () => {
-    if (sending || (!value.trim() && !images.length)) return;
+  const submit = async (text = value) => {
+    if (sending || (!text.trim() && !images.length)) return;
     setSending(true);
     setError(null);
     try {
-      await api.prompt(session, value, images.map((i) => i.image));
+      if (external) await api.message(session.id, text);
+      else {
+        count(session.id, text);
+        const handled = text.startsWith('/') && !images.length ? native(session, text) : false;
+        if (handled === false) await api.prompt(session.id, text, images.map((i) => i.image));
+        else await handled;
+      }
       setValue('');
       setImages([]);
-    } catch (reason) {
-      setError(`not sent · ${reason instanceof Error ? reason.message : 'server unreachable'}`);
+    } catch (failure) {
+      setError(`not sent · ${reason(failure)}`);
     } finally {
       setSending(false);
     }
   };
 
+  const complete = (command: CommandInfo | undefined) => {
+    if (!command || command.unavailable) return;
+    setValue(`/${command.name} `);
+  };
+
+  const cycleMode = () => {
+    const at = CYCLE.indexOf(session.mode ?? 'default');
+    const next = CYCLE[(at + 1) % CYCLE.length];
+    api.setMode(session.id, next).catch((failure: unknown) => setError(`mode not changed · ${reason(failure)}`));
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (menuOpen && !external && matches.length) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setHighlighted((h) => (h + step + matches.length) % matches.length);
+        return;
+      }
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        complete(matches[highlighted]);
+        return;
+      }
+      if (event.key === 'Enter' && !event.shiftKey && !event.altKey) {
+        event.preventDefault();
+        const command = matches[highlighted];
+        if (command && !command.unavailable) void submit(`/${command.name}`);
+        return;
+      }
+    }
+    if (menuOpen && event.key === 'Escape') {
+      event.preventDefault();
+      setMenuClosed(true);
+      return;
+    }
     if (event.key === 'Enter' && event.altKey) {
       // M-enter: a newline where the caret is (browsers insert nothing for it)
       event.preventDefault();
-      const field = event.currentTarget;
-      const { selectionStart: from, selectionEnd: to } = field;
+      const target = event.currentTarget;
+      const { selectionStart: from, selectionEnd: to } = target;
       setValue(value.slice(0, from) + '\n' + value.slice(to));
-      requestAnimationFrame(() => field.setSelectionRange(from + 1, from + 1));
+      requestAnimationFrame(() => target.setSelectionRange(from + 1, from + 1));
     } else if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
       void submit();
-    } else if (event.key === 'Escape' && running) {
+    } else if (event.key === 'Tab' && event.shiftKey && !external) {
       event.preventDefault();
-      api.interrupt(session).catch((reason: unknown) => setError(`not interrupted · ${reason instanceof Error ? reason.message : ''}`));
+      cycleMode();
+    } else if (event.key === 'Escape' && !external) {
+      event.preventDefault();
+      const now = Date.now();
+      if (now - lastEsc.current < ESC_ESC_MS) {
+        lastEsc.current = 0;
+        store.set({ dialog: { kind: 'rewind', session: session.id } });
+      } else {
+        lastEsc.current = now;
+        if (running) api.interrupt(session.id).catch((failure: unknown) => setError(`not interrupted · ${reason(failure)}`));
+      }
+    } else if (event.key === 'Backspace' && !value && images.length) {
+      event.preventDefault(); // design system: backspace on an empty prompt removes the last image
+      setImages((current) => current.slice(0, -1));
     }
   };
 
   const onPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    if (external) return;
     const files = [...event.clipboardData.files].filter((file) => IMAGE_TYPES.includes(file.type));
     if (files.length) {
       event.preventDefault();
@@ -96,6 +259,7 @@ export function PromptInput({ session, running }: { session: string; running: bo
   };
 
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (external) return;
     const files = [...event.dataTransfer.files];
     if (files.some((file) => IMAGE_TYPES.includes(file.type))) {
       event.preventDefault();
@@ -103,52 +267,119 @@ export function PromptInput({ session, running }: { session: string; running: bo
     }
   };
 
+  // CommandMenu draws plain rows: a click picks the row at that position.
+  const onMenuClick = (event: MouseEvent<HTMLDivElement>) => {
+    const row = (event.target as HTMLElement).closest('.cn-menu__item');
+    const index = row ? [...row.parentElement!.querySelectorAll(':scope > .cn-menu__item')].indexOf(row) : -1;
+    if (index >= 0) {
+      complete(shown[index]);
+      field.current?.focus();
+    }
+  };
+
   const rows = Math.min(MAX_LINES, Math.max(1, value.split('\n').length));
-  const hints: Array<[string, string]> | null = running
-    ? [['enter', 'queue'], ['esc', 'interrupt']]
-    : focused
-      ? [['enter', 'send'], ['M-enter', 'newline']]
-      : null;
+  const hints: Array<[string, string]> | null = external
+    ? focused
+      ? [['enter', 'send']]
+      : null
+    : running
+      ? [['enter', 'queue'], ['esc', 'interrupt']]
+      : focused
+        ? [['enter', 'send'], ['M-enter', 'newline']]
+        : null;
 
   return (
-    <div className={`cn-prompt prompt${focused ? ' cn-prompt--focused' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={onDrop}>
-      {images.length ? (
-        <div className="cn-prompt__images">
-          {images.map((attached, i) => (
-            <button
-              key={`${attached.name}-${i}`}
-              type="button"
-              className="cn-tag prompt__image"
-              title="remove this image"
-              onClick={() => setImages((current) => current.filter((_, j) => j !== i))}
-            >
-              {glyph('misc', 'image')} {attached.name} <span className="cn-dim">{size(attached.size)}</span>
+    <>
+      {menuOpen ? (
+        <div className="cn-pane__dock prompt-menu" onMouseDown={(event) => event.preventDefault()} onClick={onMenuClick}>
+          {external ? (
+            <div className="cn-menu" role="listbox" aria-label="commands">
+              <div className="cn-menu__head">
+                <b>/</b>
+                <span className="cn-menu__query">{query}</span>
+                <span className="cn-fill" />
+                <span className="cn-kind--external">
+                  {glyph('kind', 'external')} external · slash commands can't be sent · <b>A</b> adopt
+                </span>
+              </div>
+            </div>
+          ) : commands === null ? (
+            <div className="cn-menu">
+              <div className="cn-menu__head">
+                <b>/</b>
+                <span className="cn-menu__query">{query}</span>
+                <span className="cn-fill" />
+                <span className="cn-dim">loading{glyph('misc', 'ellipsis')}</span>
+              </div>
+            </div>
+          ) : (
+            <CommandMenu
+              query={query ?? ''}
+              highlighted={highlighted - top}
+              total={commands.length}
+              commands={shown.map((c) => ({
+                name: c.name,
+                source: c.source,
+                description: c.description,
+                args: c.argumentHint || undefined,
+                unavailable: c.unavailable ?? undefined,
+              }))}
+            />
+          )}
+        </div>
+      ) : null}
+      <div
+        className={`cn-prompt prompt${focused ? ' cn-prompt--focused' : ''}${external ? ' cn-prompt--external' : ''}`}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={onDrop}
+      >
+        {external ? (
+          <div className="cn-prompt__banner cn-kind--external">
+            {glyph('kind', 'external')} external · arrives as a peer message · no slash commands ·{' '}
+            <button type="button" className="link-button" onClick={() => store.set({ dialog: { kind: 'adopt', session: session.id } })}>
+              <b>A</b> adopt
             </button>
-          ))}
+          </div>
+        ) : null}
+        {images.length ? (
+          <div className="cn-prompt__images">
+            {images.map((attached, i) => (
+              <button
+                key={`${attached.name}-${i}`}
+                type="button"
+                className="cn-tag prompt__image"
+                title="remove this image"
+                onClick={() => setImages((current) => current.filter((_, j) => j !== i))}
+              >
+                {glyph('misc', 'image')} {attached.name} <span className="cn-dim">{size(attached.size)}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="cn-prompt__line">
+          <span className="cn-prompt__marker">{glyph('message', 'prompt')}</span>
+          <textarea
+            ref={field}
+            className="prompt__input"
+            rows={rows}
+            value={value}
+            placeholder={external ? `message ${session.name}…` : 'type a prompt, / for commands'}
+            aria-label={external ? 'peer message' : 'prompt'}
+            spellCheck={false}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+          />
+          {hints ? <KeyHints keys={hints} /> : null}
         </div>
-      ) : null}
-      <div className="cn-prompt__line">
-        <span className="cn-prompt__marker">{glyph('message', 'prompt')}</span>
-        <textarea
-          className="prompt__input"
-          rows={rows}
-          value={value}
-          placeholder="type a prompt, / for commands"
-          aria-label="prompt"
-          spellCheck={false}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-        />
-        {hints ? <KeyHints keys={hints} /> : null}
+        {error ? (
+          <div className="cn-prompt__banner cn-status--error">
+            {glyph('status', 'error')} {error}
+          </div>
+        ) : null}
       </div>
-      {error ? (
-        <div className="cn-prompt__banner cn-status--error">
-          {glyph('status', 'error')} {error}
-        </div>
-      ) : null}
-    </div>
+    </>
   );
 }

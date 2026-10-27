@@ -7,12 +7,18 @@ The server listens on `127.0.0.1:7337`. Every request needs the per-run token, e
 | Request | Returns |
 |---|---|
 | `GET /api/snapshot` | `Snapshot`: every running session, the message edges, endpoints and subagents |
-| `GET /api/sessions/{id}/turns` | `Turn[]`: one per prompt, for the tree |
-| `GET /api/sessions/{id}/entries?before=&after=&around=&turn=&limit=` | `EntryPage`: a page of the conversation |
+| `GET /api/sessions/{id}/turns` | `Turn[]`: one per prompt, for the tree. `abandoned` marks a turn a rewind left behind |
+| `GET /api/sessions/{id}/entries?before=&after=&around=&turn=&limit=` | `EntryPage`: a page of the conversation. Entries on a branch a rewind left behind carry `abandoned` |
 | `GET /api/sessions/{id}/entries/{entryId}` | `EntryContent`: one entry in full |
+| `GET /api/links?source=&target=` | `LinkMessage[]`: the messages between two sessions (or a session and a peer that isn't running), oldest first, each from the transcript that has it |
+| `GET /api/history?query=&limit=` | `PastSession[]`: every session on this machine, newest first (`list_sessions()`); `running` names the node when one is open now |
+| `GET /api/history/{sessionId}?cwd=` | `SessionPreview`: its turn count and last prompts and replies. Transcripts over 32 MB are read from their end only (`partial`) |
+| `POST /api/sessions/{id}/summary` | Asks a small model for a one-line summary of what the session is doing. It arrives as the session's `summary` |
 | `WS /api/live?token=` | a `snapshot` event, then `session`, `session_removed`, `entries` and `graph` events as things change |
 
-`{id}` is the session's process id plus its start time (`<pid>-<procStart>`), so it stays the same across `/clear`.
+`{id}` is the session's process id plus its start time (`<pid>-<procStart>`), so it stays the same across `/clear`. A session started again from an old one (adopted, or restarted to rewind) is a new process: its `replaces` names the node it took over from.
+
+The summary runs one print-mode `claude -p --model haiku` call with nothing saved, no tools, no MCP servers and none of your settings, from `$XDG_RUNTIME_DIR/constellation/summary`, which the map leaves out.
 
 ## Managed sessions
 
@@ -20,12 +26,45 @@ Only for sessions Constellation started. Anything else returns 409 with the reas
 
 | Request | Body | Does |
 |---|---|---|
-| `POST /api/sessions` | `StartRequest` `{cwd, model, mode, name}` | Starts a session in `cwd` with your setup. With no `mode`, your default mode applies. Bypass is refused for now: it needs the confirming key from 3.6. Returns `Started` `{id}`. |
+| `GET /api/models` | | `ModelInfo[]` for the launcher: the list the latest session reported, or Claude Code's aliases before any has. |
+| `POST /api/sessions` | `StartRequest` `{cwd, model, mode, name, confirm}` | Starts a session in `cwd` with your setup. With no `mode`, your default mode applies. Bypass needs `confirm` set to the folder's name. Returns `Started` `{id}`. |
 | `POST /api/sessions/{id}/prompt` | `PromptRequest` `{text, images}` | Sends the prompt, or queues it behind the running turn. `images` are `{mediaType, data}` (base64 PNG, JPEG, GIF or WebP, 5 MB each). Slash commands and skills work as prompts. Returns `Queued` `{queued}`. |
 | `DELETE /api/sessions/{id}/queue` | | Drops the queued prompts. |
 | `POST /api/sessions/{id}/rename` | `RenameRequest` `{name}` | Claude Code's own `/rename`, queued like a prompt. |
 | `POST /api/sessions/{id}/interrupt` | | Stops the running turn. Queued prompts then go out in order. |
 | `POST /api/sessions/{id}/stop` | | Ends the process. Its transcript stays. |
-| `POST /api/sessions/{id}/pending/{requestId}` | `AnswerRequest` `{allow, message, updatedInput, remember}` | Answers a question, permission prompt or plan approval from the session's `pending` list. For a question, send the tool input plus `answers: {questionText: label}` as `updatedInput`. `remember` adds only Claude Code's suggested allow rule. |
+| `POST /api/sessions/{id}/pending/{requestId}` | `AnswerRequest` `{allow, message, updatedInput, remember, mode}` | Answers a question, permission prompt or plan approval from the session's `pending` list. For a question, send the tool input plus `answers: {questionText: label}` as `updatedInput`. `remember` adds only Claude Code's suggested allow rule. `mode` is for plan approval only: approve, then work in that mode (`acceptEdits`); never bypass. |
+| `GET /api/sessions/{id}/options` | | `SessionOptions`: the `/` menu's commands (with their source, and terminal-only ones marked), the models with their effort levels, and the current model and effort. |
+| `POST /api/sessions/{id}/model` | `ModelRequest` `{model}` | `set_model()`: applies from the next turn. |
+| `POST /api/sessions/{id}/effort` | `EffortRequest` `{effort}` | Sends `/effort <level>`, queued like a prompt. Returns `Queued`. |
+| `POST /api/sessions/{id}/mode` | `ModeRequest` `{mode, confirm}` | `set_permission_mode()`: applies from the next tool call. Bypass needs `confirm` set to the session's name. |
+| `GET /api/sessions/{id}/context` | | `ContextUsage`: the `/context` breakdown (`get_context_usage()`), with where auto-compact fires. |
+| `GET /api/sessions/{id}/mcp` | | `McpServer[]` (`get_mcp_status()`). |
+| `POST /api/sessions/{id}/mcp/{server}/reconnect` | | Reconnects one server. Returns the new list. |
+| `POST /api/sessions/{id}/mcp/{server}/toggle` | `ToggleRequest` `{enabled}` | Enables or disables one server. Claude Code remembers it for the project, as `/mcp` does. |
+| `POST /api/sessions/{id}/fork` | `ForkRequest` `{name}` | A new session that starts with this one's conversation, with the same model and effort. Returns `Started`. |
+| `GET /api/sessions/{id}/rewind/{entryId}` | | `RewindPreview`: the files edited since that prompt, which of them are outside the project, and the turns a rewind drops. |
+| `POST /api/sessions/{id}/rewind` | `RewindRequest` `{entry, files, conversation}` | Rewinds to just before a prompt. `files` restores the checkpoints (`rewind_files()`); `conversation` restarts the session cut back to the line before the prompt, with the same model, mode and effort; if that restart fails, the session comes back as it was and the error says so. A restart is a new node: returns `Started`. A prompt from before a `/clear` can only rewind its files. |
+| `POST /api/history/{sessionId}/resume` | `ResumeRequest` `{fork, name}` | Resumes a past session as a managed one, or forks it. A session that's running can only be forked. Returns `Started`. |
+| `POST /api/history/{sessionId}/tag` | `TagRequest` `{tag}` | Tags a past session (`tag_session()`); an empty tag clears it. Not while it runs. |
 
-A managed session's `Session` also carries `queued`, `pending` (each with its `kind`: question, permission or plan, the tool's `input`, and the `rules` "remember" would save), `activity` (`compacting`) and `error`. When you allow a tool call with a changed input, the session is told what ran. Its `costUsd` is live. Managed sessions end when the server stops.
+A managed session's `Session` also carries `queued`, `pending` (each with its `kind`: question, permission or plan, the tool's `input`, the `rules` "remember" would save, and `source: "sdk"`), `activity` (`compacting`), `error`, `effort` (once set here) and `mcp` (`{connected, failed, total}`). When you allow a tool call with a changed input, the session is told what ran. Its `costUsd` is live. Managed sessions end when the server stops.
+
+Every managed session starts with `--allow-dangerously-skip-permissions`, because Claude Code refuses to switch a session to bypass otherwise. Constellation asks for the second key that names the session before it does, and the API checks `confirm`.
+
+## Sessions you didn't start
+
+| Request | Body | Does |
+|---|---|---|
+| `POST /api/sessions/{id}/message` | `MessageRequest` `{text}` | Sends a peer message to its inbox socket. It arrives as from a session named `constellation`, so it can't run slash commands or answer prompts. Only for sessions whose registry says `peerProtocol: 1` (`Session.inbox`). |
+| `POST /api/sessions/{id}/adopt` | | Waits for its terminal copy to exit, then resumes it here by its id as a managed session. `Session.adopting` is true meanwhile. |
+| `DELETE /api/sessions/{id}/adopt` | | Stops waiting. |
+| `POST /api/sessions/{id}/terminal` | | Switches your most recently used tmux client to the session's pane (the registry's `tmux` field). |
+| `GET /api/hooks` | | `HookStatus`: whether the hooks are installed, and where. |
+| `POST /api/hooks` | | Installs them: a report script in `~/.claude/hooks/`, and two entries in `~/.claude/settings.json` (`PermissionRequest`, and `PreToolUse` on `AskUserQuestion`). Everything else in the file is kept, a symlinked file is written through to its target with its mode, and a file that isn't valid JSON is left alone. |
+| `DELETE /api/hooks` | | Removes exactly those entries and the script. |
+| `POST /api/hooks/report` | the hook's input | What the hook script posts. Needs the token like any request. |
+
+What a terminal session is waiting on shows in its `pending` list, read-only: `source: "hook"` when the hooks reported it, `source: "transcript"` when the open call was found in its transcript. Either way it's answered in the terminal.
+
+While the server runs, `$XDG_RUNTIME_DIR/constellation/server` holds its address and `…/header` the `Authorization` header, both mode 600, for the hook script. The script hands the header to `curl` as a file, so the token never shows in the process list. A server removes them when it stops, unless another one has written its own since. Constellation's own inbox is `$XDG_RUNTIME_DIR/cc-socks/constellation-<pid>.sock` (mode 600). Reports from managed sessions are ignored: those questions come through the SDK.

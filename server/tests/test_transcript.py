@@ -21,13 +21,27 @@ def test_lab_session_entries():
 
     assert starters[0] == ("slash", "/rename lab-a")
     assert [text for kind, text in starters if kind == "prompt"][0].startswith("Run this exact shell command")
-    assert ("slash", "/compact") in starters
-    assert kinds["question"] == 1 and kinds["answer"] == 1 and kinds["compact"] == 1 and kinds["interrupt"] == 1
+    # One row for the /compact you ran, in the design system's form; the command line after it isn't repeated.
+    (compact,) = [i for i in tl.items if i.kind == "compact"]
+    assert (compact.text, compact.detail) == ("/compact", "55k → 12k tokens")
+    assert ("slash", "/compact") not in starters
+    assert kinds["question"] == 1 and kinds["answer"] == 1 and kinds["interrupt"] == 1
     assert tl.turn == len(starters)
 
     answer = next(i for i in tl.items if i.kind == "answer")
     assert answer.text == "Blue"
     assert t.title == "lab-a" and t.permission_mode == "default"
+
+
+def test_a_rewound_prompt_is_left_behind():
+    # lab-a interrupted a prompt before any reply and sent it again: Claude Code continued from the same parent.
+    t, tl = read("lab-a.1-main.jsonl")
+    prompts = [i for i in tl.items if i.kind == "prompt" and i.text.startswith("Write a detailed")]
+    assert [p.abandoned for p in prompts] == [True, False] and prompts[0].parent == prompts[1].parent
+    assert tl.abandoned == {prompts[0].turn}
+    assert all(i.abandoned for i in tl.items if i.turn == prompts[0].turn)  # its interrupt too
+    assert not any(i.abandoned for i in tl.items if i.turn != prompts[0].turn)
+    assert t.first_prompt.startswith("Run this exact shell command")
 
 
 def test_messages_and_subagents():

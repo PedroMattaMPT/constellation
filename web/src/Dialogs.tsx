@@ -1,16 +1,14 @@
 import { ConfirmStop, KeyHints, ModeBadge, glyph } from '@ds';
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { api } from './api';
-import type { Session } from './protocol';
+import { api, reason } from './api';
+import type { Mode, ModelInfo } from './protocol';
 import { store, useStore } from './store';
 
-type Mode = NonNullable<Session['mode']>;
-
-// Claude Code's model aliases. The live list, with effort levels, comes with the model picker (3.5).
-const MODELS = ['default', 'opus', 'sonnet', 'haiku', 'fable'] as const;
-const MODES: Mode[] = ['default', 'plan', 'acceptEdits', 'auto', 'bypassPermissions', 'dontAsk'];
+// Claude Code's own aliases, until the server has the list a session reported (get_server_info).
+const ALIASES = ['default', 'opus', 'sonnet', 'haiku', 'fable'];
+export const MODES: Mode[] = ['default', 'plan', 'acceptEdits', 'auto', 'bypassPermissions', 'dontAsk'];
 // The design system's line for each mode (SessionLauncher).
-const MODE_NOTE: Record<Mode, string> = {
+export const MODE_NOTE: Record<Mode, string> = {
   default: 'asks before edits and commands',
   plan: 'reads only until you approve a plan',
   acceptEdits: 'edits files without asking',
@@ -40,7 +38,7 @@ function rememberFolder(folder: string) {
 }
 
 /** One labelled row of a dialog; the label lights up while the row has focus (design system: focused field). */
-function Field({ id, label, focus, onFocus, children }: { id: string; label: string; focus: string; onFocus: (id: string) => void; children: ReactNode }) {
+export function Field({ id, label, focus, onFocus, children }: { id: string; label: string; focus: string; onFocus: (id: string) => void; children: ReactNode }) {
   return (
     <div className={`cn-field${focus === id ? ' cn-field--focused' : ''}`} onFocus={() => onFocus(id)}>
       <span className="cn-field__label">{label}</span>
@@ -50,7 +48,7 @@ function Field({ id, label, focus, onFocus, children }: { id: string; label: str
 }
 
 /** Radio chips: click, or ← → while one has focus. */
-function Choice<T extends string>({
+export function Choice<T extends string>({
   options,
   value,
   onChange,
@@ -115,12 +113,22 @@ export function Launcher() {
 
   const [folder, setFolder] = useState(recent[0] ?? '');
   const [name, setName] = useState<string | null>(null); // null: follows the folder
-  const [model, setModel] = useState<(typeof MODELS)[number]>('default');
+  const [models, setModels] = useState<string[]>(ALIASES);
+  const [model, setModel] = useState('default');
   const [mode, setMode] = useState<Mode | null>(null); // null: your own default mode
+  const [confirm, setConfirm] = useState(''); // bypass: the folder's name, typed back
   const [prompt, setPrompt] = useState('');
   const [focus, setFocus] = useState('folder');
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+
+  // The short names of the models a running session reported, so the chips stay one line.
+  useEffect(() => {
+    api.models().then(
+      (list: ModelInfo[]) => setModels(list.filter((m) => !m.value.startsWith('claude-')).map((m) => m.value)),
+      () => {},
+    );
+  }, []);
 
   const taken = new Set(Object.values(sessions).map((s) => s.name));
   const suggested = (() => {
@@ -130,20 +138,28 @@ export function Launcher() {
     return candidate;
   })();
   const finalName = (name ?? suggested).trim();
-  const ready = folder.trim() !== '' && finalName !== '' && !starting;
+  const bypass = mode === 'bypassPermissions';
+  const confirmed = !bypass || confirm === base(folder.trim());
+  const ready = folder.trim() !== '' && finalName !== '' && !starting && confirmed;
 
   const start = async () => {
     if (!ready) return;
     setStarting(true);
     setError(null);
     try {
-      const { id } = await api.start({ cwd: folder.trim(), model: model === 'default' ? null : model, mode, name: finalName });
+      const { id } = await api.start({
+        cwd: folder.trim(),
+        model: model === 'default' ? null : model,
+        mode,
+        name: finalName,
+        confirm: bypass ? confirm : null,
+      });
       rememberFolder(folder.trim());
       if (prompt.trim()) await api.prompt(id, prompt);
       store.set({ dialog: null });
       store.focus(id);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'could not start');
+    } catch (failure) {
+      setError(reason(failure, 'could not start'));
       setStarting(false);
     }
   };
@@ -159,7 +175,7 @@ export function Launcher() {
   };
 
   return (
-    <div className="cn-dialog" role="dialog" aria-label="new session" onKeyDown={onKeyDown}>
+    <div className={`cn-dialog${bypass ? ' cn-dialog--danger' : ''}`} role="dialog" aria-label="new session" onKeyDown={onKeyDown}>
       <div className="cn-dialog__title">
         <b>new session</b>
         <span className="cn-fill" />
@@ -188,7 +204,7 @@ export function Launcher() {
       <Field id="model" label="model" focus={focus} onFocus={setFocus}>
         <Choice
           label="model"
-          options={MODELS}
+          options={models}
           value={model}
           onChange={setModel}
           render={(m, on) => (
@@ -199,15 +215,23 @@ export function Launcher() {
         />
       </Field>
       <Field id="mode" label="mode" focus={focus} onFocus={setFocus}>
-        <Choice
-          label="mode"
-          options={MODES}
-          value={mode}
-          onChange={setMode}
-          render={(m) => <ModeBadge mode={m} />}
-          disabled={(m) => m === 'bypassPermissions' && 'bypass needs its confirming key, which comes with mode switching'}
-        />
+        <Choice label="mode" options={MODES} value={mode} onChange={setMode} render={(m) => <ModeBadge mode={m} />} />
         <div className="cn-dim">{mode ? MODE_NOTE[mode] : 'your default mode, from your settings'}</div>
+        {bypass ? (
+          <div className="cn-risk cn-risk--critical">
+            <span className="cn-chip cn-chip--critical">
+              {glyph('alert', 'critical')} bypass
+            </span>{' '}
+            every tool runs unchecked in <b>{folder.trim() || 'the folder'}</b>. Type <b>{base(folder.trim())}</b> to confirm:{' '}
+            <input
+              className="cn-input cn-input--inline dialog-input dialog-input--inline"
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              spellCheck={false}
+              aria-label="type the folder's name to confirm bypass"
+            />
+          </div>
+        ) : null}
       </Field>
       <Field id="prompt" label="prompt" focus={focus} onFocus={setFocus}>
         <textarea
@@ -225,7 +249,7 @@ export function Launcher() {
         <button type="button" className="cn-btn" onClick={() => store.set({ dialog: null })}>
           Cancel <span className="cn-btn__key">esc</span>
         </button>
-        <button type="button" className="cn-btn cn-btn--primary" disabled={!ready} onClick={() => void start()}>
+        <button type="button" className={`cn-btn ${bypass ? 'cn-btn--danger' : 'cn-btn--primary'}`} disabled={!ready} onClick={() => void start()}>
           {starting ? `starting${glyph('misc', 'ellipsis')}` : 'Start'} <span className="cn-btn__key">enter</span>
         </button>
       </div>

@@ -35,15 +35,90 @@
           "default": false,
           "description": "Allow and remember: add Claude Code's suggested allow rule.",
           "type": "boolean"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "default",
+                "plan",
+                "acceptEdits",
+                "auto",
+                "bypassPermissions",
+                "dontAsk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Plan approval: the mode to work in afterwards, such as acceptEdits."
         }
       },
       "required": [
         "allow",
         "message",
         "updatedInput",
-        "remember"
+        "remember",
+        "mode"
       ],
       "title": "AnswerRequest",
+      "type": "object"
+    },
+    "CommandInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "argumentHint": {
+          "default": "",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "built-in",
+            "skill",
+            "command",
+            "mcp",
+            "plugin"
+          ],
+          "type": "string"
+        },
+        "aliases": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unavailable": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why it can't run here: 'terminal-only'."
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "argumentHint",
+        "source",
+        "aliases",
+        "unavailable"
+      ],
+      "title": "CommandInfo",
       "type": "object"
     },
     "Context": {
@@ -85,6 +160,90 @@
         "percent"
       ],
       "title": "Context",
+      "type": "object"
+    },
+    "ContextCategory": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "integer"
+        },
+        "kind": {
+          "description": "used, deferred (not in the window yet), buffer or free.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "tokens",
+        "kind"
+      ],
+      "title": "ContextCategory",
+      "type": "object"
+    },
+    "ContextUsage": {
+      "additionalProperties": false,
+      "description": "The /context breakdown (get_context_usage).",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "totalTokens": {
+          "type": "integer"
+        },
+        "maxTokens": {
+          "type": "integer"
+        },
+        "percent": {
+          "type": "number"
+        },
+        "autoCompact": {
+          "type": "boolean"
+        },
+        "compactAt": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where auto-compact fires, as a share of the window."
+        },
+        "categories": {
+          "items": {
+            "$ref": "#/$defs/ContextCategory"
+          },
+          "type": "array"
+        },
+        "memoryFiles": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/MemoryFile"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "model",
+        "totalTokens",
+        "maxTokens",
+        "percent",
+        "autoCompact",
+        "compactAt",
+        "categories",
+        "memoryFiles"
+      ],
+      "title": "ContextUsage",
       "type": "object"
     },
     "Edge": {
@@ -142,6 +301,26 @@
         "msgIds"
       ],
       "title": "Edge",
+      "type": "object"
+    },
+    "EffortRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "effort": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "effort"
+      ],
+      "title": "EffortRequest",
       "type": "object"
     },
     "Endpoint": {
@@ -348,6 +527,11 @@
         "sessionId": {
           "description": "The transcript this entry is in.",
           "type": "string"
+        },
+        "abandoned": {
+          "default": false,
+          "description": "On a branch a rewind left: not part of the conversation any more.",
+          "type": "boolean"
         }
       },
       "required": [
@@ -366,7 +550,8 @@
         "peer",
         "msgId",
         "agentId",
-        "sessionId"
+        "sessionId",
+        "abandoned"
       ],
       "title": "Entry",
       "type": "object"
@@ -444,6 +629,28 @@
       "title": "EntryPage",
       "type": "object"
     },
+    "ForkRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ForkRequest",
+      "type": "object"
+    },
     "GraphEvent": {
       "additionalProperties": false,
       "properties": {
@@ -480,6 +687,29 @@
       "title": "GraphEvent",
       "type": "object"
     },
+    "HookStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "installed": {
+          "type": "boolean"
+        },
+        "settings": {
+          "description": "The settings file the hooks go in.",
+          "type": "string"
+        },
+        "script": {
+          "description": "The hook script.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "installed",
+        "settings",
+        "script"
+      ],
+      "title": "HookStatus",
+      "type": "object"
+    },
     "ImageInput": {
       "additionalProperties": false,
       "properties": {
@@ -505,9 +735,316 @@
       "title": "ImageInput",
       "type": "object"
     },
+    "LinkMessage": {
+      "additionalProperties": false,
+      "description": "A message between two sessions, as one of them recorded it.",
+      "properties": {
+        "session": {
+          "description": "Node id of the session whose transcript has it.",
+          "type": "string"
+        },
+        "entry": {
+          "$ref": "#/$defs/Entry"
+        }
+      },
+      "required": [
+        "session",
+        "entry"
+      ],
+      "title": "LinkMessage",
+      "type": "object"
+    },
+    "McpServer": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "connected",
+            "failed",
+            "needs-auth",
+            "pending",
+            "disabled"
+          ],
+          "type": "string"
+        },
+        "tools": {
+          "default": 0,
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name",
+        "status",
+        "tools",
+        "error",
+        "scope"
+      ],
+      "title": "McpServer",
+      "type": "object"
+    },
+    "McpSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "connected": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "total": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "connected",
+        "failed",
+        "total"
+      ],
+      "title": "McpSummary",
+      "type": "object"
+    },
+    "MemoryFile": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "tokens"
+      ],
+      "title": "MemoryFile",
+      "type": "object"
+    },
+    "MessageRequest": {
+      "additionalProperties": false,
+      "description": "A peer message to a session Constellation didn't start.",
+      "properties": {
+        "text": {
+          "maxLength": 100000,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "MessageRequest",
+      "type": "object"
+    },
+    "ModeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "default",
+            "plan",
+            "acceptEdits",
+            "auto",
+            "bypassPermissions",
+            "dontAsk"
+          ],
+          "type": "string"
+        },
+        "confirm": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bypass only: the session's name, the second key that names it."
+        }
+      },
+      "required": [
+        "mode",
+        "confirm"
+      ],
+      "title": "ModeRequest",
+      "type": "object"
+    },
+    "ModelInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "description": "What set_model takes: an alias ('opus') or a model id.",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "default": "",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The model id the alias resolves to."
+        },
+        "efforts": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "value",
+        "name",
+        "description",
+        "model",
+        "efforts"
+      ],
+      "title": "ModelInfo",
+      "type": "object"
+    },
+    "ModelRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "maxLength": 120,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "ModelRequest",
+      "type": "object"
+    },
+    "PastSession": {
+      "additionalProperties": false,
+      "description": "A session in the resume picker (list_sessions).",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "modified": {
+          "description": "Unix ms.",
+          "type": "integer"
+        },
+        "tag": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "firstPrompt": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "branch": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "running": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Node id, when a live process has this session open."
+        }
+      },
+      "required": [
+        "sessionId",
+        "name",
+        "project",
+        "cwd",
+        "modified",
+        "tag",
+        "firstPrompt",
+        "branch",
+        "running"
+      ],
+      "title": "PastSession",
+      "type": "object"
+    },
     "PendingRequest": {
       "additionalProperties": false,
-      "description": "A question, permission prompt or plan approval a managed session is waiting on.",
+      "description": "A question, permission prompt or plan approval a session is waiting on.",
       "properties": {
         "id": {
           "type": "string"
@@ -538,6 +1075,16 @@
         "at": {
           "description": "Unix ms.",
           "type": "integer"
+        },
+        "source": {
+          "default": "sdk",
+          "description": "sdk: a managed session's, answered here. hook, transcript: a terminal session's, answered there.",
+          "enum": [
+            "sdk",
+            "hook",
+            "transcript"
+          ],
+          "type": "string"
         }
       },
       "required": [
@@ -546,9 +1093,31 @@
         "tool",
         "input",
         "rules",
-        "at"
+        "at",
+        "source"
       ],
       "title": "PendingRequest",
+      "type": "object"
+    },
+    "PreviewLine": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "prompt",
+            "reply"
+          ],
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "title": "PreviewLine",
       "type": "object"
     },
     "PromptRequest": {
@@ -600,6 +1169,87 @@
         "name"
       ],
       "title": "RenameRequest",
+      "type": "object"
+    },
+    "ResumeRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "fork": {
+          "default": false,
+          "type": "boolean"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "fork",
+        "name"
+      ],
+      "title": "ResumeRequest",
+      "type": "object"
+    },
+    "RewindPreview": {
+      "additionalProperties": false,
+      "description": "What rewinding to a prompt restores: the files edited since, and which are outside the project.",
+      "properties": {
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "outside": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "turns": {
+          "description": "Turns that rewinding the conversation drops.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "files",
+        "outside",
+        "turns"
+      ],
+      "title": "RewindPreview",
+      "type": "object"
+    },
+    "RewindRequest": {
+      "additionalProperties": false,
+      "description": "Rewind to just before a prompt: its files, its conversation, or both.",
+      "properties": {
+        "entry": {
+          "description": "The prompt's entry id.",
+          "type": "string"
+        },
+        "files": {
+          "default": true,
+          "type": "boolean"
+        },
+        "conversation": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "entry",
+        "files",
+        "conversation"
+      ],
+      "title": "RewindRequest",
       "type": "object"
     },
     "Session": {
@@ -871,17 +1521,74 @@
           "default": false,
           "type": "boolean"
         },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The model in use: from the SDK when managed, else the last reply."
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model-written one-liner, only after you ask for one."
+        },
+        "summaryAt": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "inbox": {
+          "default": false,
+          "description": "It has an inbox socket Constellation can send a peer message to.",
+          "type": "boolean"
+        },
+        "adopting": {
+          "default": false,
+          "description": "Constellation resumes it here as soon as its terminal copy exits.",
+          "type": "boolean"
+        },
+        "replaces": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The node this one took over from: adopted, or restarted to rewind."
+        },
+        "pending": {
+          "description": "Waiting for your answer: from the SDK (managed) or the hooks (terminal).",
+          "items": {
+            "$ref": "#/$defs/PendingRequest"
+          },
+          "type": "array"
+        },
         "queued": {
           "description": "Prompts waiting for the current turn to end.",
           "items": {
             "type": "string"
-          },
-          "type": "array"
-        },
-        "pending": {
-          "description": "Waiting for your answer.",
-          "items": {
-            "$ref": "#/$defs/PendingRequest"
           },
           "type": "array"
         },
@@ -908,6 +1615,29 @@
           ],
           "default": null,
           "description": "How the last turn failed, if it did."
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set through Constellation; until then your settings' effort applies."
+        },
+        "mcp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpSummary"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -944,10 +1674,18 @@
         "counts",
         "compactions",
         "transcriptExists",
-        "queued",
+        "model",
+        "summary",
+        "summaryAt",
+        "inbox",
+        "adopting",
+        "replaces",
         "pending",
+        "queued",
         "activity",
-        "error"
+        "error",
+        "effort",
+        "mcp"
       ],
       "title": "Session",
       "type": "object"
@@ -969,6 +1707,84 @@
         "session"
       ],
       "title": "SessionEvent",
+      "type": "object"
+    },
+    "SessionOptions": {
+      "additionalProperties": false,
+      "description": "What a managed session's / menu and model picker offer (from get_server_info).",
+      "properties": {
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/CommandInfo"
+          },
+          "type": "array"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/ModelInfo"
+          },
+          "type": "array"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effort": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set through Constellation, else the effortLevel in your settings."
+        }
+      },
+      "required": [
+        "commands",
+        "models",
+        "model",
+        "effort"
+      ],
+      "title": "SessionOptions",
+      "type": "object"
+    },
+    "SessionPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "turns": {
+          "type": "integer"
+        },
+        "lines": {
+          "description": "The last few prompts and replies.",
+          "items": {
+            "$ref": "#/$defs/PreviewLine"
+          },
+          "type": "array"
+        },
+        "partial": {
+          "default": false,
+          "description": "A huge transcript: only its end was read, so turns is a floor.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "sessionId",
+        "turns",
+        "lines",
+        "partial"
+      ],
+      "title": "SessionPreview",
       "type": "object"
     },
     "SessionRemovedEvent": {
@@ -1104,13 +1920,26 @@
             }
           ],
           "default": null
+        },
+        "confirm": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bypass only: the folder's name, typed back."
         }
       },
       "required": [
         "cwd",
         "model",
         "mode",
-        "name"
+        "name",
+        "confirm"
       ],
       "title": "StartRequest",
       "type": "object"
@@ -1199,6 +2028,41 @@
       "title": "Subagent",
       "type": "object"
     },
+    "TagRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "tag": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "tag"
+      ],
+      "title": "TagRequest",
+      "type": "object"
+    },
+    "ToggleRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "title": "ToggleRequest",
+      "type": "object"
+    },
     "Turn": {
       "additionalProperties": false,
       "properties": {
@@ -1214,13 +2078,18 @@
         "attention": {
           "default": false,
           "type": "boolean"
+        },
+        "abandoned": {
+          "default": false,
+          "type": "boolean"
         }
       },
       "required": [
         "turn",
         "entry",
         "entries",
-        "attention"
+        "attention",
+        "abandoned"
       ],
       "title": "Turn",
       "type": "object"
@@ -1277,6 +2146,66 @@
     },
     "answerRequest": {
       "$ref": "#/$defs/AnswerRequest"
+    },
+    "linkMessages": {
+      "items": {
+        "$ref": "#/$defs/LinkMessage"
+      },
+      "type": "array"
+    },
+    "sessionOptions": {
+      "$ref": "#/$defs/SessionOptions"
+    },
+    "modelRequest": {
+      "$ref": "#/$defs/ModelRequest"
+    },
+    "effortRequest": {
+      "$ref": "#/$defs/EffortRequest"
+    },
+    "modeRequest": {
+      "$ref": "#/$defs/ModeRequest"
+    },
+    "contextUsage": {
+      "$ref": "#/$defs/ContextUsage"
+    },
+    "mcpServers": {
+      "items": {
+        "$ref": "#/$defs/McpServer"
+      },
+      "type": "array"
+    },
+    "toggleRequest": {
+      "$ref": "#/$defs/ToggleRequest"
+    },
+    "pastSessions": {
+      "items": {
+        "$ref": "#/$defs/PastSession"
+      },
+      "type": "array"
+    },
+    "sessionPreview": {
+      "$ref": "#/$defs/SessionPreview"
+    },
+    "resumeRequest": {
+      "$ref": "#/$defs/ResumeRequest"
+    },
+    "forkRequest": {
+      "$ref": "#/$defs/ForkRequest"
+    },
+    "tagRequest": {
+      "$ref": "#/$defs/TagRequest"
+    },
+    "rewindPreview": {
+      "$ref": "#/$defs/RewindPreview"
+    },
+    "rewindRequest": {
+      "$ref": "#/$defs/RewindRequest"
+    },
+    "messageRequest": {
+      "$ref": "#/$defs/MessageRequest"
+    },
+    "hookStatus": {
+      "$ref": "#/$defs/HookStatus"
     }
   },
   "required": [
@@ -1289,7 +2218,24 @@
     "promptRequest",
     "queued",
     "renameRequest",
-    "answerRequest"
+    "answerRequest",
+    "linkMessages",
+    "sessionOptions",
+    "modelRequest",
+    "effortRequest",
+    "modeRequest",
+    "contextUsage",
+    "mcpServers",
+    "toggleRequest",
+    "pastSessions",
+    "sessionPreview",
+    "resumeRequest",
+    "forkRequest",
+    "tagRequest",
+    "rewindPreview",
+    "rewindRequest",
+    "messageRequest",
+    "hookStatus"
   ],
   "title": "Protocol",
   "type": "object"

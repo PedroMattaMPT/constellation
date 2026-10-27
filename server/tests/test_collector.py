@@ -68,3 +68,72 @@ def test_messages_become_edges(claude, me):
     assert {e.name for e in snapshot.endpoints} == {"constellation"}
     assert edges[("endpoint:constellation", ids["lab-b"])] == 1
     assert len(snapshot.subagents) == 1 and snapshot.subagents[0].status == "reported"
+
+
+def test_an_edge_opens_the_messages_between_two_sessions(claude, me):
+    other = claude.process()
+    claude.register(me, "a1", "lab-a", cwd="/lab/a")
+    claude.register(other, "b1", "lab-b", cwd="/lab/b")
+    claude.transcript("/lab/a", "a1", "lab-a.1-main.jsonl")
+    claude.transcript("/lab/b", "b1", "lab-b.jsonl")
+    collector = Collector(claude.root, waiting_for=no_waiting)
+    collector.poll()
+    ids = {s.name: s.id for s in collector.snapshot().sessions}
+
+    found = collector.link(ids["lab-a"], ids["lab-b"])
+    # Each message both ways, once from the sender's transcript and once from the receiver's, oldest first
+    assert [(m.session, m.entry.kind) for m in found] == [
+        (ids["lab-a"], "sent"),
+        (ids["lab-b"], "received"),
+        (ids["lab-b"], "sent"),
+        (ids["lab-a"], "received"),
+    ]
+    assert found[-1].entry.text == "pong"
+    assert collector.link(ids["lab-a"], "endpoint:nobody") == []
+
+
+def test_rewound_turns_and_what_a_rewind_restores(claude, me):
+    claude.register(me, "a1", "lab-a", cwd="/lab/a")
+    path = claude.transcript("/lab/a", "a1", "lab-a.1-main.jsonl")
+    collector = Collector(claude.root, waiting_for=no_waiting)
+    collector.poll()
+    key = collector.snapshot().sessions[0].id
+    turns = collector.turns(key)
+    abandoned = [t for t in turns if t.abandoned]
+    assert len(abandoned) == 1 and abandoned[0].entry.abandoned and not abandoned[0].attention
+
+    prompts = [t.entry for t in turns if t.entry.kind == "prompt"]
+    preview = collector.rewind_preview(key, prompts[0].id)
+    assert preview is not None and preview.turns == len(turns) - 2  # the /rename turn and the abandoned one stay out
+    assert collector.rewind_preview(key, turns[0].entry.id) is None  # /rename isn't a prompt
+    assert collector.prompt_parent(key, prompts[0].id) == (
+        prompts[0].id and collector.nodes[key].timeline.by_id[prompts[0].id].parent,
+        True,
+    )
+
+    with path.open("a") as fh:  # a Write after the last prompt: rewinding to it restores that file
+        call = {
+            "type": "assistant",
+            "uuid": "w1",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "id": "toolu_w",
+                        "name": "Write",
+                        "input": {"file_path": "/elsewhere/x.txt", "content": "x" * 150_000},  # past content()'s cut
+                    }
+                ]
+            },
+        }
+        fh.write(json.dumps(call) + "\n")
+    collector.poll()
+    preview = collector.rewind_preview(key, prompts[-1].id)
+    assert preview.files == ["/elsewhere/x.txt"] and preview.outside == ["/elsewhere/x.txt"]
+
+
+def test_constellations_own_helper_sessions_stay_off_the_map(claude, me):
+    claude.register(me, "h1", "helper", cwd="/run/constellation/summary")
+    collector = Collector(claude.root, waiting_for=no_waiting, ignore={"/run/constellation/summary"})
+    collector.poll()
+    assert collector.snapshot().sessions == []

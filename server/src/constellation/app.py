@@ -10,27 +10,52 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import secrets
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
+from claude_agent_sdk import get_session_info
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from . import history, hooks, options, summary, tmux
+from .claude import files
 from .collector import Collector
+from .inbox import Inbox, InboxError
 from .manager import Manager, ManagerError
 from .protocol import (
     AnswerRequest,
+    ContextCategory,
+    ContextUsage,
+    EffortRequest,
     EntryContent,
     EntryPage,
     Event,
+    ForkRequest,
+    HookStatus,
+    LinkMessage,
+    McpServer,
+    MemoryFile,
+    MessageRequest,
+    ModelInfo,
+    ModelRequest,
+    ModeRequest,
+    PastSession,
     PromptRequest,
     Queued,
     RenameRequest,
+    ResumeRequest,
+    RewindPreview,
+    RewindRequest,
+    SessionOptions,
+    SessionPreview,
     Snapshot,
     SnapshotEvent,
     Started,
     StartRequest,
+    TagRequest,
+    ToggleRequest,
     Turn,
 )
 
@@ -55,16 +80,35 @@ class Hub:
                     queue.put_nowait(data)
 
 
+def _mcp(servers: list[dict]) -> list[McpServer]:
+    states = {"connected", "failed", "needs-auth", "pending", "disabled"}
+    return [
+        McpServer(
+            name=m.get("name") or "?",
+            status=m.get("status") if m.get("status") in states else "failed",
+            tools=len(m.get("tools") or []),
+            error=m.get("error"),
+            scope=m.get("scope"),
+        )
+        for m in servers
+    ]
+
+
 def create_app(
     collector: Collector,
     token: str,
     web_dist: Path | None = None,
     poll_interval: float = 0.5,
     manager: Manager | None = None,
+    url: str | None = None,
+    inbox: Inbox | None = None,
 ) -> FastAPI:
+    """`url`: where this server listens, published for the hook script (roadmap 3.12)."""
     hub = Hub()
     manager = manager or collector.manager or Manager()
     collector.manager = manager  # one manager: the collector marks its sessions as managed
+    collector.ignore.add(str(summary.folder()))  # summary calls are Constellation's own, not sessions
+    inbox = inbox or Inbox()
 
     async def poll_forever() -> None:
         while True:
@@ -77,8 +121,17 @@ def create_app(
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI):
         task = asyncio.create_task(poll_forever())
+        try:
+            await inbox.start()
+        except OSError as error:  # messaging terminal sessions won't work; everything else does
+            print(f"no inbox socket: {error!r}")
+        if url:
+            hooks.publish(url, token)
         yield
         task.cancel()
+        if url:
+            hooks.unpublish(token)
+        await inbox.close()
         await manager.close()  # managed sessions end with the server; their transcripts stay
 
     app = FastAPI(title="Constellation", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
@@ -132,11 +185,22 @@ def create_app(
     def refused(error: ManagerError) -> HTTPException:
         return HTTPException(status_code=409, detail=str(error))
 
+    def managed_or_409(key: str):
+        try:
+            return manager._get(key)
+        except ManagerError as error:
+            raise refused(error) from error
+
+    @app.get("/api/models", dependencies=api)
+    def models() -> list[ModelInfo]:
+        """For the launcher: the list the latest session reported, or Claude Code's aliases before any has."""
+        return options.models(manager.models) or options.FALLBACK_MODELS
+
     @app.post("/api/sessions", dependencies=api)
     async def start(request: StartRequest) -> Started:
-        if request.mode == "bypassPermissions":
-            # The design system asks for a second, confirming key; that arrives with mode switching (3.6).
-            raise HTTPException(status_code=422, detail="bypass can't be chosen at start yet")
+        if request.mode == "bypassPermissions" and request.confirm != Path(request.cwd.rstrip("/")).name:
+            # The design system's launcher rule: bypass needs the folder's name typed back.
+            raise HTTPException(status_code=422, detail="bypass needs the folder's name typed back")
         try:
             managed = await manager.start(request.cwd, model=request.model, mode=request.mode, name=request.name)
         except ManagerError as error:
@@ -189,9 +253,261 @@ def create_app(
                 message=request.message,
                 updated_input=request.updated_input,
                 remember=request.remember,
+                mode=request.mode,
             )
         except ManagerError as error:
             raise refused(error) from error
+
+    # ── Commands, model, mode, context, MCP (managed) ─────────────────────
+
+    @app.get("/api/sessions/{key}/options", dependencies=api)
+    def session_options(key: str) -> SessionOptions:
+        managed = managed_or_409(key)
+        effort = managed.effort or files.setting(managed.cwd, "effortLevel")
+        model = managed.model or collector.model_of(key)  # before its first turn: the model its transcript last used
+        return options.session_options(managed.info, managed.cwd, model, effort)
+
+    @app.post("/api/sessions/{key}/model", dependencies=api, status_code=204)
+    async def set_model(key: str, request: ModelRequest) -> None:
+        try:
+            await manager.set_model(key, request.model)
+        except ManagerError as error:
+            raise refused(error) from error
+
+    @app.post("/api/sessions/{key}/effort", dependencies=api)
+    async def set_effort(key: str, request: EffortRequest) -> Queued:
+        try:
+            return Queued(queued=await manager.set_effort(key, request.effort))
+        except ManagerError as error:
+            raise refused(error) from error
+
+    @app.post("/api/sessions/{key}/mode", dependencies=api, status_code=204)
+    async def set_mode(key: str, request: ModeRequest) -> None:
+        if request.mode == "bypassPermissions":
+            # Design system principle 5: bypass takes a second key that names the session.
+            name = (await asyncio.to_thread(collector.registry, key) or {}).get("name")
+            if not name or request.confirm != name:
+                raise HTTPException(status_code=422, detail="bypass needs the session's name as confirm")
+        try:
+            await manager.set_mode(key, request.mode)
+        except ManagerError as error:
+            raise refused(error) from error
+
+    @app.get("/api/sessions/{key}/context", dependencies=api)
+    async def context(key: str) -> ContextUsage:
+        try:
+            usage = await manager.context(key)
+        except ManagerError as error:
+            raise refused(error) from error
+        maximum = usage.get("rawMaxTokens") or usage.get("maxTokens") or 1
+        threshold = usage.get("autoCompactThreshold")
+        return ContextUsage(
+            model=usage.get("model") or "",
+            total_tokens=usage.get("totalTokens") or 0,
+            max_tokens=maximum,
+            percent=usage.get("percentage") or 0,
+            auto_compact=bool(usage.get("isAutoCompactEnabled")),
+            compact_at=threshold / maximum if threshold and usage.get("isAutoCompactEnabled") else None,
+            categories=[
+                ContextCategory(
+                    id=c.get("id") or c.get("name", ""),
+                    name=c.get("name", ""),
+                    tokens=c.get("tokens") or 0,
+                    kind=c.get("kind") or ("deferred" if c.get("isDeferred") else "used"),
+                )
+                for c in usage.get("categories") or []
+            ],
+            memory_files=[
+                MemoryFile(path=str(m.get("path") or ""), tokens=m.get("tokens") or 0)
+                for m in usage.get("memoryFiles") or []
+                if isinstance(m, dict)
+            ],
+        )
+
+    @app.get("/api/sessions/{key}/mcp", dependencies=api)
+    async def mcp(key: str) -> list[McpServer]:
+        try:
+            return _mcp(await manager.mcp(key))
+        except ManagerError as error:
+            raise refused(error) from error
+
+    @app.post("/api/sessions/{key}/mcp/{server}/reconnect", dependencies=api)
+    async def mcp_reconnect(key: str, server: str) -> list[McpServer]:
+        try:
+            return _mcp(await manager.mcp_reconnect(key, server))
+        except ManagerError as error:
+            raise refused(error) from error
+
+    @app.post("/api/sessions/{key}/mcp/{server}/toggle", dependencies=api)
+    async def mcp_toggle(key: str, server: str, request: ToggleRequest) -> list[McpServer]:
+        try:
+            return _mcp(await manager.mcp_toggle(key, server, request.enabled))
+        except ManagerError as error:
+            raise refused(error) from error
+
+    # ── History: fork, rewind, resume, tag ────────────────────────────────
+
+    @app.post("/api/sessions/{key}/fork", dependencies=api)
+    async def fork(key: str, request: ForkRequest) -> Started:
+        managed = managed_or_409(key)
+        registry = await asyncio.to_thread(collector.registry, key) or {}
+        name = request.name or f"{registry.get('name') or managed.name or 'session'}-fork"
+        try:
+            return Started(id=(await manager.fork(key, name)).id)
+        except ManagerError as error:
+            raise refused(error) from error
+
+    @app.get("/api/sessions/{key}/rewind/{entry_id}", dependencies=api)
+    def rewind_preview(key: str, entry_id: str) -> RewindPreview:
+        preview = collector.rewind_preview(key, entry_id)
+        if preview is None:
+            raise HTTPException(status_code=404, detail="no such prompt")
+        return preview
+
+    @app.post("/api/sessions/{key}/rewind", dependencies=api)
+    async def rewind(key: str, request: RewindRequest) -> Started:
+        found = collector.prompt_parent(key, request.entry)
+        if found is None:
+            raise HTTPException(status_code=404, detail="no such prompt")
+        parent, current = found
+        if request.conversation and not current:
+            raise HTTPException(status_code=409, detail="that prompt is from before a /clear: only its files rewind")
+        try:
+            managed = await manager.rewind(
+                key, request.entry, parent, files_too=request.files, conversation=request.conversation
+            )
+        except ManagerError as error:
+            raise refused(error) from error
+        return Started(id=managed.id)
+
+    @app.get("/api/history", dependencies=api)
+    async def past(query: str = "", limit: int = Query(200, ge=1, le=1000)) -> list[PastSession]:
+        return await asyncio.to_thread(lambda: history.past(collector.running(), query, limit))
+
+    @app.get("/api/history/{session_id}", dependencies=api)
+    async def preview(session_id: str, cwd: str | None = None) -> SessionPreview:
+        try:
+            return await asyncio.to_thread(history.preview, session_id, cwd)
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=404, detail=f"no such session: {error}") from error
+
+    @app.post("/api/history/{session_id}/resume", dependencies=api)
+    async def resume(session_id: str, request: ResumeRequest) -> Started:
+        running = (await asyncio.to_thread(collector.running)).get(session_id)
+        if running and not request.fork:
+            # One process per session: a running one is adopted, or forked.
+            raise HTTPException(status_code=409, detail="it's running: adopt it, or fork it")
+        info = await asyncio.to_thread(get_session_info, session_id)
+        if info is None or not info.cwd:
+            raise HTTPException(status_code=404, detail="no such session")
+        try:
+            managed = await manager.start(info.cwd, name=request.name, resume=session_id, fork=request.fork)
+        except ManagerError as error:
+            raise refused(error) from error
+        return Started(id=managed.id)
+
+    @app.post("/api/history/{session_id}/tag", dependencies=api, status_code=204)
+    async def tag(session_id: str, request: TagRequest) -> None:
+        if session_id in (await asyncio.to_thread(collector.running)):
+            raise HTTPException(status_code=409, detail="it's running: tag it once it has stopped")
+        try:
+            await asyncio.to_thread(history.tag, session_id, request.tag)
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+
+    # ── Sessions you didn't start ─────────────────────────────────────────
+
+    @app.post("/api/sessions/{key}/message", dependencies=api, status_code=204)
+    async def message(key: str, request: MessageRequest) -> None:
+        registry = await asyncio.to_thread(collector.registry, key)
+        if registry is None:
+            raise HTTPException(status_code=404, detail="no such session")
+        if key in manager.sessions:
+            raise HTTPException(status_code=409, detail="it's managed: send it a prompt")
+        if not registry.get("messagingSocketPath") or registry.get("peerProtocol") != 1:
+            raise HTTPException(status_code=409, detail="it has no inbox Constellation knows how to use")
+        try:
+            await inbox.send(registry["messagingSocketPath"], request.text)
+        except InboxError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @app.post("/api/sessions/{key}/adopt", dependencies=api, status_code=204)
+    async def adopt(key: str) -> None:  # async: the wait for the terminal copy runs on the event loop
+        registry = await asyncio.to_thread(collector.registry, key)
+        if registry is None:
+            raise HTTPException(status_code=404, detail="no such session")
+        if key in manager.sessions:
+            raise HTTPException(status_code=409, detail="it's already managed")
+        r = registry
+        manager.adopt(key, r["sessionId"], r["cwd"], r.get("name"), r["pid"], r.get("procStart"))
+
+    @app.delete("/api/sessions/{key}/adopt", dependencies=api, status_code=204)
+    async def cancel_adopt(key: str) -> None:
+        manager.cancel_adoption(key)
+
+    @app.post("/api/sessions/{key}/terminal", dependencies=api, status_code=204)
+    def terminal(key: str) -> None:
+        registry = collector.registry(key)
+        if registry is None:
+            raise HTTPException(status_code=404, detail="no such session")
+        if not registry.get("tmux"):
+            raise HTTPException(status_code=409, detail="it isn't running in tmux")
+        try:
+            tmux.go_to(registry["tmux"])
+        except tmux.TmuxError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @app.post("/api/sessions/{key}/summary", dependencies=api, status_code=204)
+    async def summarize(key: str) -> None:
+        found = collector.activity(key)
+        if found is None:
+            raise HTTPException(status_code=404, detail="no such session")
+        task, lines = found
+        if not lines:
+            raise HTTPException(status_code=409, detail="nothing to summarize yet")
+        try:
+            line = await summary.summarize(task, lines, manager.cli_path)
+        except (OSError, RuntimeError) as error:
+            raise HTTPException(status_code=409, detail=f"no summary: {error}") from error
+        collector.summaries[key] = (line, int(time.time() * 1000))  # one dict write: no lock needed
+
+    @app.get("/api/links", dependencies=api)
+    def links(source: str, target: str) -> list[LinkMessage]:
+        return collector.link(source, target)
+
+    # ── Hooks for terminal sessions (3.12) ────────────────────────────────
+
+    @app.get("/api/hooks", dependencies=api)
+    def hook_status() -> HookStatus:
+        return hooks.status(collector.claude_dir)
+
+    @app.post("/api/hooks", dependencies=api)
+    def install_hooks() -> HookStatus:
+        try:
+            return hooks.install(collector.claude_dir)
+        except (OSError, ValueError) as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    @app.delete("/api/hooks", dependencies=api)
+    def remove_hooks() -> HookStatus:
+        try:
+            return hooks.uninstall(collector.claude_dir)
+        except OSError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+
+    def locked_add(payload: dict) -> None:
+        with collector.lock:  # in a thread: a long poll holds the lock, and the event loop mustn't wait on it
+            collector.hooks.add(payload)
+
+    @app.post("/api/hooks/report", dependencies=api, status_code=204)
+    async def hook_report(request: Request) -> None:
+        try:
+            payload = await request.json()
+        except ValueError:
+            return
+        managed = {m.session_id for m in manager.sessions.values()}
+        if isinstance(payload, dict) and payload.get("session_id") not in managed:  # those come through the SDK
+            await asyncio.to_thread(locked_add, payload)
 
     @app.websocket("/api/live")
     async def live(ws: WebSocket) -> None:

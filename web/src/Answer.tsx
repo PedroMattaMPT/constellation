@@ -1,7 +1,7 @@
 // Answering a managed session: the design system's QuestionCard and PermissionPrompt, made to take keys and
 // clicks. Their markup and classes are the design system's; the text fields are real inputs where the
-// components draw a caret.
-import { KeyHints, glyph } from '@ds';
+// components draw a caret. A terminal session's question, reported by its hooks, shows read-only.
+import { KeyHints, QuestionCard, glyph } from '@ds';
 import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import { api } from './api';
 import type { PendingRequest, Session } from './protocol';
@@ -34,16 +34,19 @@ function readQuestions(input: Record<string, unknown>): Question[] {
   });
 }
 
-/** Cards take keys only while focused. A new one takes focus unless you are typing something, or when C-Space a asks. */
+/**
+ * Cards take keys only while focused. A new one takes focus unless you are typing something, or when C-Space a asks.
+ * A read-only card (attention -1) never takes focus: there is nothing to answer here.
+ */
 function useCardFocus(attention: number) {
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const active = document.activeElement;
     const typing = (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) && active.value.trim() !== '';
-    if (!typing) card.current?.focus();
+    if (!typing && attention >= 0) card.current?.focus();
   }, []);
   useEffect(() => {
-    if (attention) card.current?.focus();
+    if (attention > 0) card.current?.focus();
   }, [attention]);
   return card;
 }
@@ -98,7 +101,7 @@ function QuestionAnswer({ session, request, more }: { session: Session; request:
     );
     setSending(true);
     try {
-      await api.answer(session.id, request.id, { allow: true, message: null, updatedInput: { ...request.input, answers: text }, remember: false });
+      await api.answer(session.id, request.id, { allow: true, message: null, updatedInput: { ...request.input, answers: text }, remember: false, mode: null });
     } catch (reason) {
       setError(failure(reason));
       setSending(false);
@@ -290,9 +293,18 @@ function risks(tool: string, input: Record<string, unknown>, cwd: string): Array
 
 type Editing = { kind: 'changes' | 'reason'; value: string };
 
-function PermissionAnswer({ session, request, more }: { session: Session; request: PendingRequest; more: number }) {
+/** The footer of a card a terminal session is waiting on: answered in its terminal (design system: QuestionCard). */
+function ReadonlyFoot() {
+  return (
+    <span className="cn-kind--external">
+      {glyph('kind', 'external')} external session · answer it in its terminal, or <b>A</b> adopt to answer here
+    </span>
+  );
+}
+
+function PermissionAnswer({ session, request, more, readonly = false }: { session: Session; request: PendingRequest; more: number; readonly?: boolean }) {
   const attention = useStore((s) => s.attention);
-  const card = useCardFocus(attention);
+  const card = useCardFocus(readonly ? -1 : attention);
   const plan = request.kind === 'plan';
   const what = shape(request.tool, request.input);
   const [highlighted, setHighlighted] = useState(0);
@@ -300,7 +312,10 @@ function PermissionAnswer({ session, request, more }: { session: Session; reques
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
-  const send = async (allow: boolean, extra: { message?: string; updatedInput?: Record<string, unknown>; remember?: boolean } = {}) => {
+  const send = async (
+    allow: boolean,
+    extra: { message?: string; updatedInput?: Record<string, unknown>; remember?: boolean; mode?: 'acceptEdits' } = {},
+  ) => {
     setSending(true);
     setError(null);
     try {
@@ -309,6 +324,7 @@ function PermissionAnswer({ session, request, more }: { session: Session; reques
         message: extra.message ?? null,
         updatedInput: extra.updatedInput ?? null,
         remember: extra.remember ?? false,
+        mode: extra.mode ?? null,
       });
     } catch (reason) {
       setError(failure(reason));
@@ -316,10 +332,16 @@ function PermissionAnswer({ session, request, more }: { session: Session; reques
     }
   };
 
-  // Plan approval has two answers; a permission prompt has the design system's four.
+  // Plan approval has Claude Code's three answers; a permission prompt has the design system's four.
   const options: Array<{ key: string; label: string; extra?: ReactNode; act: () => void; deny?: boolean; disabled?: boolean }> = plan
     ? [
-        { key: 'y', label: 'Approve the plan', act: () => void send(true) },
+        { key: 'y', label: 'Approve the plan', extra: <span className="cn-dim">then ask before edits</span>, act: () => void send(true) },
+        {
+          key: 'a',
+          label: 'Approve, and accept edits',
+          extra: <span className="cn-mode cn-mode--edits">{glyph('mode', 'acceptEdits')} edits</span>,
+          act: () => void send(true, { mode: 'acceptEdits' }),
+        },
         { key: 'n', label: 'Keep planning, and say why…', act: () => setEditing({ kind: 'reason', value: '' }), deny: true },
       ]
     : [
@@ -361,7 +383,7 @@ function PermissionAnswer({ session, request, more }: { session: Session; reques
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (editing || sending) return; // the field below has the keys
+    if (editing || sending || readonly) return; // the field below has the keys; a terminal's prompt takes none
     const n = Number(event.key);
     const byKey = options.findIndex((o) => o.key === event.key);
     const chosen = Number.isInteger(n) && n >= 1 && n <= options.length ? n - 1 : byKey;
@@ -378,7 +400,7 @@ function PermissionAnswer({ session, request, more }: { session: Session; reques
 
   const diff = what.diff && what.diff.length > MAX_DIFF_LINES ? [...what.diff.slice(0, MAX_DIFF_LINES), `  … ${what.diff.length - MAX_DIFF_LINES} more lines`] : what.diff;
   return (
-    <div className="cn-card cn-card--permission answer-card" role="group" tabIndex={0} ref={card} onKeyDown={onKeyDown} aria-label={`${request.tool} wants to ${what.verb}`}>
+    <div className={`cn-card cn-card--permission answer-card${readonly ? ' cn-card--readonly' : ''}`} role="group" tabIndex={readonly ? -1 : 0} ref={card} onKeyDown={onKeyDown} aria-label={`${request.tool} wants to ${what.verb}`}>
       <div className="cn-card__head">
         <span className="cn-chip cn-chip--waiting">
           {glyph('status', 'waiting')} {request.tool}
@@ -427,19 +449,19 @@ function PermissionAnswer({ session, request, more }: { session: Session; reques
             role="radio"
             aria-checked={i === highlighted}
             aria-disabled={option.disabled}
-            className={`cn-opt option-row${i === highlighted ? ' cn-opt--on' : ''}${option.deny ? ' cn-opt--deny' : ''}${option.disabled ? ' option-row--disabled' : ''}`}
+            className={`cn-opt${readonly ? '' : ' option-row'}${i === highlighted && !readonly ? ' cn-opt--on' : ''}${option.deny ? ' cn-opt--deny' : ''}${option.disabled ? ' option-row--disabled' : ''}`}
             onClick={() => {
-              if (option.disabled) return;
+              if (option.disabled || readonly) return;
               setHighlighted(i);
               option.act();
             }}
           >
-            <span className="cn-row__bar">{i === highlighted ? glyph('tree', 'cursor') : ' '}</span>
-            <span className="cn-opt__key">{i + 1}</span>
+            <span className="cn-row__bar">{i === highlighted && !readonly ? glyph('tree', 'cursor') : ' '}</span>
+            <span className="cn-opt__key">{readonly ? ' ' : i + 1}</span>
             <span className="cn-opt__label">{option.label}</span>
             {option.extra ? <span className="cn-opt__desc">{option.extra}</span> : null}
             <span className="cn-fill" />
-            {option.disabled ? null : <span className="cn-keys__key">{option.key}</span>}
+            {option.disabled || readonly ? null : <span className="cn-keys__key">{option.key}</span>}
           </div>
         ))}
       </div>
@@ -470,25 +492,36 @@ function PermissionAnswer({ session, request, more }: { session: Session; reques
         </div>
       ) : null}
       <div className="cn-card__foot">
-        <KeyHints
-          keys={
-            editing
-              ? [['enter', editing.kind === 'reason' ? 'send' : 'allow'], ['S-enter', 'newline'], ['esc', 'back']]
-              : plan
-                ? [['y', 'approve'], ['n', 'keep planning'], ['esc', 'later']]
-                : [['y', 'allow'], ['a', 'always'], ['e', 'edit'], ['n', 'deny'], ['esc', 'later']]
-          }
-        />
+        {readonly ? (
+          <ReadonlyFoot />
+        ) : (
+          <KeyHints
+            keys={
+              editing
+                ? [['enter', editing.kind === 'reason' ? 'send' : 'allow'], ['S-enter', 'newline'], ['esc', 'back']]
+                : plan
+                  ? [['y', 'approve'], ['a', 'accept edits'], ['n', 'keep planning'], ['esc', 'later']]
+                  : [['y', 'allow'], ['a', 'always'], ['e', 'edit'], ['n', 'deny'], ['esc', 'later']]
+            }
+          />
+        )}
       </div>
     </div>
   );
 }
 
-/** The first pending request of a managed session, docked above its prompt box. */
+/** The first pending request of a session, docked above its prompt box. A terminal session's is read-only. */
 export function AnswerCard({ session }: { session: Session }) {
   const request = session.pending[0];
   if (!request) return null;
   const more = session.pending.length - 1;
+  if (request.source !== 'sdk') {
+    return request.kind === 'question' ? (
+      <QuestionCard key={request.id} session={session.name} questions={readQuestions(request.input)} state="readonly" />
+    ) : (
+      <PermissionAnswer key={request.id} session={session} request={request} more={more} readonly />
+    );
+  }
   // Keyed by request: each new question or prompt starts with a fresh card.
   return request.kind === 'question' ? (
     <QuestionAnswer key={request.id} session={session} request={request} more={more} />

@@ -15,6 +15,7 @@ PROTOCOL_VERSION = 1
 
 Status = Literal["working", "waiting", "idle", "stale", "error", "stopped"]
 Mode = Literal["default", "plan", "acceptEdits", "auto", "bypassPermissions", "dontAsk"]
+Effort = Literal["low", "medium", "high", "xhigh", "max"]
 WaitingFor = Literal["permission prompt", "input needed", "sandbox request", "worker request", "dialog open"]
 EntryKind = Literal[
     # The message types of the tree (design-system MsgType)
@@ -58,7 +59,7 @@ class Context(Wire):
 
 
 class PendingRequest(Wire):
-    """A question, permission prompt or plan approval a managed session is waiting on."""
+    """A question, permission prompt or plan approval a session is waiting on."""
 
     id: str
     kind: Literal["question", "permission", "plan"]
@@ -66,6 +67,16 @@ class PendingRequest(Wire):
     input: dict[str, Any] = Field(description="The tool's input: for a question, its `questions` list.")
     rules: list[str] = Field(default_factory=list, description="What 'allow and remember' saves: `Bash(touch x)`.")
     at: int = Field(description="Unix ms.")
+    source: Literal["sdk", "hook", "transcript"] = Field(
+        "sdk",
+        description="sdk: a managed session's, answered here. hook, transcript: a terminal session's, answered there.",
+    )
+
+
+class McpSummary(Wire):
+    connected: int
+    failed: int
+    total: int
 
 
 class Session(Wire):
@@ -106,11 +117,21 @@ class Session(Wire):
     counts: dict[str, int] = Field(default_factory=dict, description="Entries per kind.")
     compactions: int = 0
     transcript_exists: bool = False
+    model: str | None = Field(None, description="The model in use: from the SDK when managed, else the last reply.")
+    summary: str | None = Field(None, description="Model-written one-liner, only after you ask for one.")
+    summary_at: int | None = None
+    inbox: bool = Field(False, description="It has an inbox socket Constellation can send a peer message to.")
+    adopting: bool = Field(False, description="Constellation resumes it here as soon as its terminal copy exits.")
+    replaces: str | None = Field(None, description="The node this one took over from: adopted, or restarted to rewind.")
+    pending: list[PendingRequest] = Field(
+        default_factory=list, description="Waiting for your answer: from the SDK (managed) or the hooks (terminal)."
+    )
     # Managed sessions only: what the SDK stream says that Claude Code's files don't.
     queued: list[str] = Field(default_factory=list, description="Prompts waiting for the current turn to end.")
-    pending: list[PendingRequest] = Field(default_factory=list, description="Waiting for your answer.")
     activity: str | None = Field(None, description="What Claude Code is busy with besides a turn: 'compacting'.")
     error: str | None = Field(None, description="How the last turn failed, if it did.")
+    effort: str | None = Field(None, description="Set through Constellation; until then your settings' effort applies.")
+    mcp: McpSummary | None = None
 
 
 class Entry(Wire):
@@ -132,6 +153,7 @@ class Entry(Wire):
     msg_id: str | None = None
     agent_id: str | None = None
     session_id: str = Field(description="The transcript this entry is in.")
+    abandoned: bool = Field(False, description="On a branch a rewind left: not part of the conversation any more.")
 
 
 class EntryContent(Wire):
@@ -191,6 +213,113 @@ class Turn(Wire):
     entry: Entry
     entries: int
     attention: bool = False
+    abandoned: bool = False
+
+
+class LinkMessage(Wire):
+    """A message between two sessions, as one of them recorded it."""
+
+    session: str = Field(description="Node id of the session whose transcript has it.")
+    entry: Entry
+
+
+class CommandInfo(Wire):
+    name: str
+    description: str
+    argument_hint: str = ""
+    source: Literal["built-in", "skill", "command", "mcp", "plugin"]
+    aliases: list[str] = []
+    unavailable: str | None = Field(None, description="Why it can't run here: 'terminal-only'.")
+
+
+class ModelInfo(Wire):
+    value: str = Field(description="What set_model takes: an alias ('opus') or a model id.")
+    name: str
+    description: str = ""
+    model: str | None = Field(None, description="The model id the alias resolves to.")
+    efforts: list[str] = []
+
+
+class SessionOptions(Wire):
+    """What a managed session's / menu and model picker offer (from get_server_info)."""
+
+    commands: list[CommandInfo]
+    models: list[ModelInfo]
+    model: str | None
+    effort: str | None = Field(description="Set through Constellation, else the effortLevel in your settings.")
+
+
+class ContextCategory(Wire):
+    id: str
+    name: str
+    tokens: int
+    kind: str = Field(description="used, deferred (not in the window yet), buffer or free.")
+
+
+class MemoryFile(Wire):
+    path: str
+    tokens: int
+
+
+class ContextUsage(Wire):
+    """The /context breakdown (get_context_usage)."""
+
+    model: str
+    total_tokens: int
+    max_tokens: int
+    percent: float
+    auto_compact: bool
+    compact_at: float | None = Field(None, description="Where auto-compact fires, as a share of the window.")
+    categories: list[ContextCategory]
+    memory_files: list[MemoryFile] = []
+
+
+class McpServer(Wire):
+    name: str
+    status: Literal["connected", "failed", "needs-auth", "pending", "disabled"]
+    tools: int = 0
+    error: str | None = None
+    scope: str | None = None
+
+
+class PastSession(Wire):
+    """A session in the resume picker (list_sessions)."""
+
+    session_id: str
+    name: str
+    project: str
+    cwd: str | None = None
+    modified: int = Field(description="Unix ms.")
+    tag: str | None = None
+    first_prompt: str | None = None
+    branch: str | None = None
+    running: str | None = Field(None, description="Node id, when a live process has this session open.")
+
+
+class PreviewLine(Wire):
+    kind: Literal["prompt", "reply"]
+    text: str
+
+
+class SessionPreview(Wire):
+    session_id: str
+    turns: int
+    lines: list[PreviewLine] = Field(description="The last few prompts and replies.")
+    partial: bool = Field(False, description="A huge transcript: only its end was read, so turns is a floor.")
+
+
+class RewindPreview(Wire):
+    """What rewinding to a prompt restores: the files edited since, and which are outside the project."""
+
+    files: list[str]
+    outside: list[str]
+    turns: int = Field(description="Turns that rewinding the conversation drops.")
+
+
+class HookStatus(Wire):
+    installed: bool
+    settings: str = Field(description="The settings file the hooks go in.")
+    script: str = Field(description="The hook script.")
 
 
 # ── Live events (server → client, over the WebSocket) ──────────────────────
@@ -240,6 +369,7 @@ class StartRequest(Wire):
     model: str | None = None
     mode: Mode | None = None
     name: str | None = Field(None, max_length=80)
+    confirm: str | None = Field(None, description="Bypass only: the folder's name, typed back.")
 
 
 class Started(Wire):
@@ -264,6 +394,50 @@ class RenameRequest(Wire):
     name: str = Field(min_length=1, max_length=80)
 
 
+class ModelRequest(Wire):
+    model: str = Field(min_length=1, max_length=120)
+
+
+class EffortRequest(Wire):
+    effort: Effort
+
+
+class ModeRequest(Wire):
+    mode: Mode
+    confirm: str | None = Field(None, description="Bypass only: the session's name, the second key that names it.")
+
+
+class ToggleRequest(Wire):
+    enabled: bool
+
+
+class ResumeRequest(Wire):
+    fork: bool = False
+    name: str | None = Field(None, max_length=80)
+
+
+class ForkRequest(Wire):
+    name: str | None = Field(None, max_length=80)
+
+
+class TagRequest(Wire):
+    tag: str | None = Field(None, max_length=60)
+
+
+class RewindRequest(Wire):
+    """Rewind to just before a prompt: its files, its conversation, or both."""
+
+    entry: str = Field(description="The prompt's entry id.")
+    files: bool = True
+    conversation: bool = True
+
+
+class MessageRequest(Wire):
+    """A peer message to a session Constellation didn't start."""
+
+    text: str = Field(min_length=1, max_length=100_000)
+
+
 class AnswerRequest(Wire):
     """Answer a pending request. For a question, `updated_input` carries the tool input plus `answers`."""
 
@@ -271,6 +445,7 @@ class AnswerRequest(Wire):
     message: str | None = Field(None, description="Why it was denied: the session reads this.")
     updated_input: dict[str, Any] | None = None
     remember: bool = Field(False, description="Allow and remember: add Claude Code's suggested allow rule.")
+    mode: Mode | None = Field(None, description="Plan approval: the mode to work in afterwards, such as acceptEdits.")
 
 
 class Protocol(Wire):
@@ -286,3 +461,20 @@ class Protocol(Wire):
     queued: Queued
     rename_request: RenameRequest
     answer_request: AnswerRequest
+    link_messages: list[LinkMessage]
+    session_options: SessionOptions
+    model_request: ModelRequest
+    effort_request: EffortRequest
+    mode_request: ModeRequest
+    context_usage: ContextUsage
+    mcp_servers: list[McpServer]
+    toggle_request: ToggleRequest
+    past_sessions: list[PastSession]
+    session_preview: SessionPreview
+    resume_request: ResumeRequest
+    fork_request: ForkRequest
+    tag_request: TagRequest
+    rewind_preview: RewindPreview
+    rewind_request: RewindRequest
+    message_request: MessageRequest
+    hook_status: HookStatus
