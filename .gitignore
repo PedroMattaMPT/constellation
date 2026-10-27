@@ -15,3 +15,8 @@ web/dist/
 
 # Browser checks
 .playwright-mcp/
+
+# Hallmark design skill: a local clone, its project-skill link and its run state
+vendor/
+.claude/skills/hallmark
+.hallmark/

@@ -200,7 +200,7 @@ def status_bar(ink: Ink, width: int, focused: str) -> str:
 def map_view(ink: Ink, width: int, focused: str) -> str:
     waiting = sum(s.status == "waiting" for s in SESSIONS)
     stale = sum(s.status == "stale" for s in SESSIONS)
-    head = Line().add("MAP", ink.st("fg-muted", "bold")).add(f"  {len(SESSIONS)} sessions  ", ink.st("fg-muted"))
+    head = Line().add("map", ink.st("fg-muted", "bold")).add(f"  {len(SESSIONS)} sessions  ", ink.st("fg-muted"))
     head.add(f" {ink.g('status', 'waiting')} {waiting} need you ", ink.st("status-waiting-fill")).add("  ")
     head.add(f"{ink.g('status', 'stale')} {stale} stale", ink.st("status-stale")).add("  ")
     head.add(f"{ink.g('status', 'error')} 1 error", ink.st("status-error"))
@@ -511,7 +511,7 @@ class Specimen(ct.ConstellationApp):
             Line().add(f"  {g('misc', 'radio_off')} o Other…", st("fg-muted")),
         ]
         q.update("\n".join([str(Line().add("Which session store should the token layer use?", st("fg-strong", "bold")))] + list(map(str, opts))))
-        self.query_one("#prompt-a", PromptBox).update(str(Line().add(g("message", "prompt") + " ", st("msg-prompt", "bold")).add("answer above, or type to reply…", st("fg-faint", "italic"))))
+        self.query_one("#prompt-a", PromptBox).update(str(Line().add(g("message", "prompt") + " ", st("msg-prompt", "bold")).add("answer above, or type to reply…", st("fg-muted", "italic"))))
         spin = ct.GLYPHS["spinner"]["ascii" if ink.tier == "ascii" else "unicode"][1]
         conv_b = [
             Line().add(f"{g('message', 'prompt')} Limit /login to 5/min per IP.", st("msg-prompt", "bold")),
@@ -523,7 +523,7 @@ class Specimen(ct.ConstellationApp):
             Line().add(spin + " Editing src/limits/route.ts", st("status-working")).add("  4s · esc interrupts", st("fg-muted")),
         ]
         self.query_one("#conv-b", Static).update("\n".join(map(str, conv_b)))
-        self.query_one("#prompt-b", PromptBox).update(str(Line().add(g("message", "prompt") + " ", st("msg-prompt", "bold")).add("queue a message…", st("fg-faint", "italic"))))
+        self.query_one("#prompt-b", PromptBox).update(str(Line().add(g("message", "prompt") + " ", st("msg-prompt", "bold")).add("queue a message…", st("fg-muted", "italic"))))
         self.query_one("#prompt-a", PromptBox).focus()
 
     # -- prompt screen: permission + command menu
@@ -555,7 +555,7 @@ class Specimen(ct.ConstellationApp):
             Line().add("  3 Allow with changes…", st("fg")),
             Line().add("  4 Deny, and say why…", st("msg-denied")),
         ])))
-        self.query_one("#prompt-a", PromptBox).update(str(Line().add(g("message", "prompt") + " ", st("msg-prompt", "bold")).add("answer above, or type to reply…", st("fg-faint", "italic"))))
+        self.query_one("#prompt-a", PromptBox).update(str(Line().add(g("message", "prompt") + " ", st("msg-prompt", "bold")).add("answer above, or type to reply…", st("fg-muted", "italic"))))
         self.query_one("#conv-b", Static).update("\n".join(map(str, [
             Line().add(f"{g('message', 'prompt')} Draft the weekly update from this week's notes.", st("msg-prompt", "bold")),
             Line().add(f"{g('message', 'tool')} Read", st("msg-tool")).add(" notes/2026-10-26.md", st("fg-muted")),

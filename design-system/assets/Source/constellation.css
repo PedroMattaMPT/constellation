@@ -109,6 +109,7 @@
   --edge-subagent: var(--slate);
   --shadow-float: 0 8px 24px #000000b3;
   --ring-focus: 0 0 0 1px #0a0c10, 0 0 0 3px #b3c1ff;
+  --ring-focus-inset: inset 0 0 0 2px #b3c1ff;
   color-scheme: dark;
 }
 [data-theme="light"] {
@@ -198,6 +199,7 @@
   --edge-subagent: var(--slate);
   --shadow-float: 0 8px 24px #1a1e2829, 0 1px 2px #1a1e281f;
   --ring-focus: 0 0 0 1px #ffffff, 0 0 0 3px #3949b8;
+  --ring-focus-inset: inset 0 0 0 2px #3949b8;
   color-scheme: light;
 }
 @media (prefers-color-scheme: light) {
@@ -288,6 +290,7 @@
     --edge-subagent: var(--slate);
     --shadow-float: 0 8px 24px #1a1e2829, 0 1px 2px #1a1e281f;
     --ring-focus: 0 0 0 1px #ffffff, 0 0 0 3px #3949b8;
+    --ring-focus-inset: inset 0 0 0 2px #3949b8;
     color-scheme: light;
   }
 }
@@ -366,11 +369,14 @@
   --glyph-misc-mcp: "mcp";
 }
 
+:root { scrollbar-color: var(--line-strong) var(--panel); caret-color: var(--focus); }
+::selection { background: var(--selection); color: var(--fg-strong); }
+
 .text-body { font-family: var(--font-mono); font-size: 13px; line-height: 20px; font-weight: 400; }
 .text-bold { font-family: var(--font-mono); font-size: 13px; line-height: 20px; font-weight: 700; }
 .text-dim { font-family: var(--font-mono); font-size: 13px; line-height: 20px; font-weight: 400; color: var(--fg-muted); }
 .text-italic { font-family: var(--font-mono); font-size: 13px; line-height: 20px; font-weight: 400; font-style: italic; }
 .text-link { font-family: var(--font-mono); font-size: 13px; line-height: 20px; font-weight: 400; text-decoration: underline; text-underline-offset: 2px; }
 .text-chrome { font-family: var(--font-mono); font-size: 12px; line-height: 20px; font-weight: 400; }
-.text-label { font-family: var(--font-mono); font-size: 11px; line-height: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.text-label { font-family: var(--font-mono); font-size: 12px; line-height: 16px; font-weight: 700; color: var(--fg-muted); }
 .text-display { font-family: var(--font-mono); font-size: 24px; line-height: 28px; font-weight: 700; letter-spacing: -0.01em; }

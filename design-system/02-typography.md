@@ -24,7 +24,7 @@ font-variant-ligatures: none;
 | `text-italic` | 13 / 20 | 400 italic | Model-written summaries, placeholders | *italic* |
 | `text-link` | 13 / 20 | 400, underline | Jumpable references: files, sessions, message ids | underline |
 | `text-chrome` | 12 / 20 | 400 | Status bar, status lines, chips, key hints | plain (same cell) |
-| `text-label` | 11 / 16 | 700, uppercase, +0.06 em | Section labels: `MAP`, `TREE` | bold dim uppercase |
+| `text-label` | 12 / 16 | 700, `fg-muted` | Section labels: `map`, `tree` | bold dim |
 | `text-display` | 24 / 28 | 700 | The wordmark and empty states only | bold |
 
 At 13 px, 1 cell = 1ch ≈ 7.8 px and one line = 20 px. Spacing tokens round the cell to 8 px.

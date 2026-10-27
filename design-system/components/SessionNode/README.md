@@ -17,7 +17,7 @@ One running session on the map: name, project, branch, mode, status, time since 
 | default | `raised`, 1 px `line-strong` | map row, plain |
 | focused | `focus` border + 1 px ring | `▌` in `focus`, bold name, lanes for its pairs in `focus` |
 | selected (for broadcast) | `selection` ground, `[x]` | `selection` row, `[x]` |
-| disabled (stopped, leaving the map) | 55 % opacity, no key hints | dim row |
+| disabled (stopped, leaving the map) | `fg-faint`, `line` border, no fills or edges, no key hints | dim row |
 | needs attention | amber border + 3 px amber edge, `? needs you` chip, pulled to the top of its group | amber chip in the status column, `outer` left edge in `status-waiting-fill` |
 | stale | 3 px `status-stale` edge, `◌ stale 3h`, step dim italic | rose status, dim italic step |
 | error | 3 px `status-error` edge, `× error`, step in `status-error` | same |

@@ -77,7 +77,7 @@ The two weakest pairs are warning vs critical in the light theme and working vs 
 | `fg` | `#e3e7ee` | 254 | `#1a1e28` | 234 | `default` | Body text and conversation, on bg, surface, panel, raised and selection. |
 | `fg-strong` | `#f6f8fc` | 231 | `#07090d` | 232 | `default` bold | Session names, the focused pane title, chosen values; always bold. On every surface. |
 | `fg-muted` | `#97a0b2` | 248 | `#566074` | 60 | `default` dim | Metadata (project, branch, times, counts), tool output, secondary labels; the TUI's dim. On every surface. |
-| `fg-faint` | `#687186` | 244 | `#7c8496` | 244 | `default` dim | Disabled controls, tree guides, placeholder text. Never for information you need: 3:1 only. |
+| `fg-faint` | `#687186` | 244 | `#7c8496` | 244 | `default` dim | Disabled controls, tree guides, separators. Never for text someone has to read (placeholders, filtered-out rows, switched-off chips take fg-muted): 3:1 only. |
 
 ### Lines
 

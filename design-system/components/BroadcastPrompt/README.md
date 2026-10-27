@@ -20,7 +20,7 @@ Send one prompt to several sessions you pick (`prefix b`), like tmux `synchroniz
 | default | `edge` border | `round $edge` |
 | focused (row) | `selection` + `▌` | same |
 | selected (picked) | `[x]` in bold `msg-sent` | same |
-| disabled (Send with nothing picked) | 45 % opacity | dim |
+| disabled (Send with nothing picked) | `fg-faint` Send, no key hint | dim |
 | needs attention | waiting targets keep their amber chip | same |
 
 While a broadcast is armed, each target pane's prompt box gets the teal edge and the status bar shows `→ 3`. Text typed in the dialog is mirrored into each of those boxes, like synchronize-panes.

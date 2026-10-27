@@ -298,6 +298,13 @@ def build_css(T: Tokens) -> str:
                 L.append(f"  --glyph-{cat}-{k.replace('_', '-')}: {css_escape_str(g['unicode'])};")
     L.append("}")
     L.append("")
+    # Browser surfaces take the TUI's own choices, so both renderers scroll, select and type alike.
+    o = TEXTUAL_OVERRIDES
+    L.append(f":root {{ scrollbar-color: var(--{o['scrollbar']}) var(--{o['scrollbar-background']}); "
+             f"caret-color: var(--{o['input-cursor-background']}); }}")
+    L.append(f"::selection {{ background: var(--{o['screen-selection-background']}); "
+             f"color: var(--{o['screen-selection-foreground']}); }}")
+    L.append("")
     for g in T.src["type"]["groups"]:
         for s in g["styles"]:
             decl = [f"font-family: var(--font-mono)", f"font-size: {s['fontSize']}", f"line-height: {s['lineHeight']}",
@@ -306,12 +313,10 @@ def build_css(T: Tokens) -> str:
                 decl.append(f"letter-spacing: {s['letterSpacing']}")
             if s.get("fontStyle") == "italic":
                 decl.append("font-style: italic")
-            if s["name"] == "text-dim":
+            if s["name"] in ("text-dim", "text-label"):
                 decl.append("color: var(--fg-muted)")
             if s["name"] == "text-link":
                 decl.append("text-decoration: underline; text-underline-offset: 2px")
-            if s["name"] == "text-label":
-                decl.append("text-transform: uppercase")
             L.append(f".{s['name']} {{ {'; '.join(decl)}; }}")
     L.append("")
     return "\n".join(L)

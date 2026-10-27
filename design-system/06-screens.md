@@ -5,7 +5,7 @@ The mockups below are not drawn by hand. They are the text output of `constellat
 ## Main screen (TUI, 160 × 46)
 
 ```text
-▾ ⌂ api-server 5                 │ MAP  15 sessions   ? 3 need you   ◌ 2 stale  × 1 error                                           links ── 1  ━━ 3+  ══ 10+
+▾ ⌂ api-server 5                 │ map  15 sessions   ? 3 need you   ◌ 2 stale  × 1 error                                           links ── 1  ━━ 3+  ══ 10+
 ├ ▾ ◆ auth-refactor  ?           │ ▌api-server   ◆ auth-refactor   ? needs you  ± edits    @feat/auth-split 12s          asked: Which session store?     ◂━┓
 │ ├ ▸ › 1 Split the auth midd…   │               ◆ migrations      ? needs you  · default  @feat/auth-split  1m          permission: Bash psql -f 0042_… ◂━┛
 │ └ ▾ › 2 Go ahead, keep the…    │               ◆ rate-limits    ● working      » auto    @main             4s △ctx +1◦ Edit src/limits/route.ts         ─┐
@@ -132,7 +132,7 @@ Reading it top to bottom, left to right:
 The same main screen with `CONSTELLATION_GLYPHS=ascii`. Every state still reads. In the map below, `?` is the waiting chip, `*` working, `o` idle, `~` stale, `x` error; modes show as `+ edits`, `> auto`, `! BYPASS`; lanes use `= - #` and `<`.
 
 ```text
-- = api-server 5                 │ MAP  15 sessions   ? 3 need you   ~ 2 stale  x 1 error                                           links -- 1  == 3+  ## 10+
+- = api-server 5                 │ map  15 sessions   ? 3 need you   ~ 2 stale  x 1 error                                           links -- 1  == 3+  ## 10+
 | - + auth-refactor  ?           │ >api-server   + auth-refactor   ? needs you  + edits    @feat/auth-split 12s          asked: Which session store?     <=+
 | | + $ 1 Split the auth midd…   │               + migrations      ? needs you  . default  @feat/auth-split  1m          permission: Bash psql -f 0042_… <=+
 | ` - $ 2 Go ahead, keep the…    │               + rate-limits    * working      > auto    @main             4s ^ctx +1+ Edit src/limits/route.ts         -+

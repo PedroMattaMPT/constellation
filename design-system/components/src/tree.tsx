@@ -67,11 +67,11 @@ export interface FilterChip { type: MsgType | 'peer' | 'subagent'; count: number
 
 const FILTER_GLYPH: Record<string, string> = { peer: '→←', subagent: '◦↑' };
 
-/** Type filter for the tree (f). Each chip is glyph + count; off chips are struck to faint, never hidden. */
+/** Type filter for the tree (f). Each chip is glyph + count; off chips go dashed and muted, never hidden. */
 export function TreeFilter({ chips, query }: { chips: FilterChip[]; query?: string }) {
   return (
     <div className="cn-filter" role="toolbar" aria-label="filter by type">
-      <span className="cn-label">TREE</span>
+      <span className="cn-label">tree</span>
       {chips.map((c, i) => (
         <button key={c.type} className={cx('cn-filter__chip', c.on ? 'cn-filter__chip--on' : 'cn-filter__chip--off')} aria-pressed={c.on} title={`${i + 1}: ${c.type}`}>
           <span className={`cn-msg--${c.type === 'peer' ? 'sent' : c.type === 'subagent' ? 'subagent_started' : c.type}`}>

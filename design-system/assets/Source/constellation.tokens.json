@@ -263,7 +263,7 @@
       "role": "mark",
       "ansi": "default",
       "ansi_style": "dim",
-      "usage": "Disabled controls, tree guides, placeholder text. Never for information you need: 3:1 only."
+      "usage": "Disabled controls, tree guides, separators. Never for text someone has to read (placeholders, filtered-out rows, switched-off chips take fg-muted): 3:1 only."
     },
     {
       "group": "Lines",
@@ -1121,6 +1121,14 @@
           "light": "0 0 0 1px #ffffff, 0 0 0 3px #3949b8"
         },
         "usage": "Keyboard focus ring on web controls: a 1px ground gap, then 2px starlight."
+      },
+      {
+        "name": "ring-focus-inset",
+        "value": {
+          "dark": "inset 0 0 0 2px #b3c1ff",
+          "light": "inset 0 0 0 2px #3949b8"
+        },
+        "usage": "Keyboard focus on a full-width row in a scrolling list (tree rows), where the list would clip an outer ring: 2px starlight inside the row."
       }
     ]
   },
@@ -1212,12 +1220,11 @@
           },
           {
             "name": "text-label",
-            "fontSize": "11px",
+            "fontSize": "12px",
             "lineHeight": "16px",
             "fontWeight": 700,
-            "letterSpacing": "0.06em",
-            "sample": "MAP · 15 SESSIONS",
-            "usage": "Uppercase section labels (TUI: bold dim uppercase)."
+            "sample": "map · 15 sessions",
+            "usage": "Section labels, lowercase like every word but BYPASS (TUI: bold dim)."
           },
           {
             "name": "text-display",

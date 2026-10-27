@@ -23,6 +23,7 @@ Constellation is a control room for the 5 to 15 Claude Code sessions you keep op
 - Contrast holds in both themes and in the 256-color fallback:
   - Text tokens meet 4.5:1 on `bg`, `surface`, `panel`, `raised` and `selection`.
   - Marks (`focus`, `line-control`, `res-normal`, `edge`, `kind-managed`, `fg-faint`) meet 3:1.
+  - `fg-faint` is therefore never for text someone has to read. Placeholders, filtered-out rows and switched-off chips take `fg-muted`; `fg-faint` stays on disabled controls, guides and separators.
   - `line` and `line-strong` are decorative.
 
   `assets/Source/report.md` lists every pair.
@@ -64,14 +65,14 @@ Examples from the product:
 - **Focus:**
   - A focused pane gets a heavy `focus` border in the TUI and a 2 px `focus` border on the web; its title turns bold `fg-strong`.
   - The focused row gets `selection` plus the `▌` cursor bar in `focus`.
-  - On the web, keyboard focus on a control draws `ring-focus`.
+  - On the web, keyboard focus on a control draws `ring-focus`. A full-width row in a scrolling list draws `ring-focus-inset`, because the list would clip an outer ring.
 - **States:** every component defines five.
   - default: quiet
   - focused: `focus` border or `▌` bar
   - selected: `selection` ground, plus `[x]` in multi-select
-  - disabled: `fg-faint`, with no key hint
+  - disabled: `fg-faint`, with no key hint; fills and attention edges drop out. Never fade a disabled thing with opacity.
   - needs attention: amber fill chip plus a 3-px amber edge, and it surfaces in the status bar
-- **Motion:** two things move: the activity spinner (`▖▘▝▗`, 120 ms) and the text caret. Nothing transitions longer than 120 ms. Reduced motion stops both. A waiting session never blinks, because blinking is noise when five things wait at once.
+- **Motion:** three things move: the activity spinner (`▖▘▝▗`, 120 ms), the text caret, and a message in flight, whose edge runs its dashes twice and stops (`MessageEdge`). Nothing transitions longer than 120 ms. Reduced motion stops all three. A waiting session never blinks, because blinking is noise when five things wait at once.
 - **Elevation:** only floating things cast a shadow, and only on the web (`shadow-float`). In the terminal, a round border marks a floating thing instead.
 
 ## Iconography

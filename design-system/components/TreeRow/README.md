@@ -4,14 +4,14 @@ One row of the NERDTree-style message tree: project › session › prompt (one 
 
 **Anatomy** (one line): cursor bar `▌` · guides `│ ├ └` in `fg-faint` · disclosure `▸`/`▾` · glyph (`⌂`, `◆`/`◇`, or the message glyph in its color) · turn number for prompts · label (end-ellipsis) · status glyph for sessions · meta right-aligned in `fg-muted` (time, `+48 −12`, `182k→41k`).
 
-`TreeFilter` sits above the tree: one chip per type with its count. `1`–`7` toggle them. A switched-off chip goes dashed and faint but stays in place, so counts don't jump.
+`TreeFilter` sits above the tree: one chip per type with its count. `1`–`7` toggle them. A switched-off chip goes dashed and muted but stays in place, so counts don't jump.
 
 | State | Web | TUI |
 |---|---|---|
 | default | plain | plain |
 | focused (cursor) | `selection` + `▌` `focus` + `fg-strong` label | `tree--cursor`: `selection`, bold |
 | selected (search match) | underlined label | underlined |
-| disabled (filtered out, kept for context) | everything `fg-faint` | dim |
+| filtered out (kept for context; the tree's disabled state) | everything `fg-muted`, no bold: you still read it, so never `fg-faint` | dim |
 | needs attention (open question or permission) | label bold `msg-question`; its session row shows the `?` chip; collapsed parents bubble the chip up | same |
 
 **Consumer provides:** `kind`, `label`, `depth`, `guides` (one boolean per ancestor), `last`, `hasChildren`, `expanded`, optional `turn`, `status`, `sessionKind`, `meta`, `cursor`, `match`, `dimmed`, `attention`, `onActivate`. Children load lazily; a session with 2,000 messages expands one turn at a time.

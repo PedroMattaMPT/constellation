@@ -72,7 +72,7 @@ export function PromptBox(p: PromptBoxProps) {
         {p.value ? <span className="cn-prompt__value">{p.value}</span> : <span className="cn-prompt__ph">{p.placeholder ?? 'type a prompt, / for commands'}</span>}
         {p.focused && !p.disabled ? <span className="cn-caret" aria-hidden="true" /> : null}
         <span className="cn-fill" />
-        {p.running ? <KeyHints keys={[['enter', 'queue'], ['esc', 'interrupt']]} /> : p.focused ? <KeyHints keys={[['enter', 'send'], ['M-enter', 'newline']]} /> : null}
+        {p.disabled ? null : p.running ? <KeyHints keys={[['enter', 'queue'], ['esc', 'interrupt']]} /> : p.focused ? <KeyHints keys={[['enter', 'send'], ['M-enter', 'newline']]} /> : null}
       </div>
     </div>
   );

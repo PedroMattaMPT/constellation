@@ -26,7 +26,7 @@ Start a managed session (`prefix c`): folder, name, model, mode and an optional 
 | default | `raised`, round, `shadow-float` | `ModalScreen`, `round $line-strong` |
 | focused (field) | label in bold `focus`, input with a `focus` border and ring | same, `Input:focus` `tall $focus` |
 | selected (option) | `selection` + `focus` border on the chosen chip | `(●)` |
-| disabled (Start until valid) | 45 % opacity | dim |
+| disabled (Start until valid) | `fg-faint` Start, no key hint | dim |
 | needs attention (bypass, stop) | `status-error` border | `round $status-error` |
 
 **Data:** the server starts the session through the Agent SDK with `setting_sources=["user", "project", "local"]`, so your settings, CLAUDE.md, skills, plugins and MCP servers load. Never use bare mode.
