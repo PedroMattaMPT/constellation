@@ -82,9 +82,9 @@ SESSIONS = [
             "Port notebooks to scripts", "replied: plan in PLAN.md", kind="external"),
     Session(13, "nvim-config", "dotfiles", "idle", "default", "main", "14m",
             "Move lsp config to lazy.nvim", "replied: done, 3 files", model="haiku-5.5"),
-    Session(14, "weekly-notes", "bigpicture", "working", "plan", "main", "6s",
+    Session(14, "weekly-notes", "life-admin", "working", "plan", "main", "6s",
             "Draft the weekly update", "Read notes/2026-10-26.md", ctx=33, cost="$0.27"),
-    Session(15, "inbox-triage", "bigpicture", "waiting", "default", "main", "40s",
+    Session(15, "inbox-triage", "life-admin", "waiting", "default", "main", "40s",
             "Triage the review queue", "asked: Which PRs need you today?", ctx=26),
 ]
 BY_NAME = {s.name: s for s in SESSIONS}

@@ -19,11 +19,11 @@ The mockups below are not drawn by hand. They are the text output of `constellat
 ├ ▸ ◆ migrations  ?              │               ◆ data-clean     ○ idle        ∅ no-ask   @main             6m          2 calls denied                  ◂─┘
 ├ ▸ ◆ rate-limits ●              │               ◇ notebook-port  ◌ stale 52m   ‖ plan     @main            52m          replied: plan in PLAN.md
 ├ ▸ ◇ api-docs ○                 │  dotfiles     ◆ nvim-config    ○ idle        · default  @main            14m          replied: done, 3 files
-└ ▸ ◆ flaky-tests ×              │  bigpicture   ◆ weekly-notes   ● working     ‖ plan     @main             6s          Read notes/2026-10-26.md        ◂━┓
+└ ▸ ◆ flaky-tests ×              │  life-admin   ◆ weekly-notes   ● working     ‖ plan     @main             6s          Read notes/2026-10-26.md        ◂━┓
 ▸ ⌂ web-app 4                    │               ◆ inbox-triage    ? needs you  · default  @main            40s          asked: Which PRs need you toda…  ━┛
 ▸ ⌂ ml-pipeline 3                │┏━  1 auth-refactor ◆ api-server  ? needs you   ━━━━━━━━━━━━━━┓┌─  3 rate-limits ◆ api-server ● working  ────────────────────┐
 ▸ ⌂ dotfiles 1                   │┃ › Go ahead, keep the public API the same.                   ┃│ › Limit /login to 5/min per IP.                             │
-▸ ⌂ bigpicture 2                 │┃ /compact  182k → 41k tokens                                 ┃│ λ Agent explore: where are limits set?                      │
+▸ ⌂ life-admin 2                 │┃ /compact  182k → 41k tokens                                 ┃│ λ Agent explore: where are limits set?                      │
                                  │┃ λ Edit src/auth/session.ts  +48 −12                         ┃│   ◦ explore  working · 6 tools                              │
                                  │┃ → migrations  We need a tokens table, see schema            ┃│ λ Read src/limits/index.ts                                  │
                                  │┃ ← migrations  0042_tokens.sql drafted                       ┃│ λ Edit src/limits/route.ts  +31                             │
@@ -96,7 +96,7 @@ Reading it top to bottom, left to right:
 ## Permission prompt and `/` menu (TUI, 132 × 26)
 
 ```text
-┏━  2 migrations ◆ api-server  ? needs you   ━━━━━━━━━━━━━━━━━━━━┓┌─  14 weekly-notes ◆ bigpicture ● working  ─────────────────────┐
+┏━  2 migrations ◆ api-server  ? needs you   ━━━━━━━━━━━━━━━━━━━━┓┌─  14 weekly-notes ◆ life-admin ● working  ─────────────────────┐
 ┃ › Write the token-table migration, then apply it.              ┃│ › Draft the weekly update from this week's notes.              │
 ┃ λ Write migrations/0042_tokens.sql  +22                        ┃│ λ Read notes/2026-10-26.md                                     │
 ┃ ¶ Written. Applying it to the local database:                  ┃│ ← inbox-triage  3 PRs need review by Friday                    │
@@ -146,11 +146,11 @@ The same main screen with `CONSTELLATION_GLYPHS=ascii`. Every state still reads.
 | + + migrations  ?              │               + data-clean     o idle        0 no-ask   @main             6m          2 calls denied                  <-+
 | + + rate-limits *              │               : notebook-port  ~ stale 52m   = plan     @main            52m          replied: plan in PLAN.md
 | + : api-docs o                 │  dotfiles     + nvim-config    o idle        . default  @main            14m          replied: done, 3 files
-` + + flaky-tests x              │  bigpicture   + weekly-notes   * working     = plan     @main             6s          Read notes/2026-10-26.md        <=+
+` + + flaky-tests x              │  life-admin   + weekly-notes   * working     = plan     @main             6s          Read notes/2026-10-26.md        <=+
 + = web-app 4                    │               + inbox-triage    ? needs you  . default  @main            40s          asked: Which PRs need you toda…  =+
 + = ml-pipeline 3                │┏━  1 auth-refactor + api-server  ? needs you   ━━━━━━━━━━━━━━┓┌─  3 rate-limits + api-server * working  ────────────────────┐
 + = dotfiles 1                   │┃ $ Go ahead, keep the public API the same.                   ┃│ $ Limit /login to 5/min per IP.                             │
-+ = bigpicture 2                 │┃ /compact  182k → 41k tokens                                 ┃│ & Agent explore: where are limits set?                      │
++ = life-admin 2                 │┃ /compact  182k → 41k tokens                                 ┃│ & Agent explore: where are limits set?                      │
                                  │┃ & Edit src/auth/session.ts  +48 −12                         ┃│   + explore  working · 6 tools                              │
                                  │┃ > migrations  We need a tokens table, see schema            ┃│ & Read src/limits/index.ts                                  │
                                  │┃ < migrations  0042_tokens.sql drafted                       ┃│ & Edit src/limits/route.ts  +31                             │
